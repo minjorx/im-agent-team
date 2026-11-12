@@ -6,6 +6,7 @@ import { HandoffGuard } from '../lib/guard.js';
 import { Dedup } from '../lib/dedup.js';
 import { normalizeConfig } from '../lib/config.js';
 import { normalizeFeishuMessage } from '../lib/feishu/normalize.js';
+import { DEFAULT_BEHAVIOR, buildIdentityPrompt } from '../lib/prompt.js';
 
 test('footer round-trips and strips from text', () => {
   const footer = buildFooter({ trace: 'T-1', hop: 2, kind: 'task', taskId: 'T-1-2' });
@@ -156,4 +157,14 @@ test('feishu post event flattens rich text', () => {
   );
   assert.equal(message.mentionedMe, true);
   assert.match(message.rawText, /收到/);
+});
+
+test('identity prompt carries the working-style constraints', () => {
+  const text = buildIdentityPrompt({
+    role: { name: '调研员', mission: '核验数据' },
+    binding: { chatType: 'group' },
+  });
+  assert.match(text, /工作方式/);
+  assert.match(text, /先评估任务/);
+  assert.ok(DEFAULT_BEHAVIOR.length >= 4);
 });

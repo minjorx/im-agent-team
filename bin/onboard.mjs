@@ -19,9 +19,22 @@ function arg(name, fallback) {
   const index = args.indexOf(`--${name}`);
   return index >= 0 && args[index + 1] ? args[index + 1] : fallback;
 }
+function listArg(name) {
+  const value = arg(name);
+  if (!value) return undefined;
+  return value
+    .split(/[;|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 const name = arg('name', 'DSH Assistant');
 const id = arg('id', 'assistant');
+const roleName = arg('role-name', name);
+const roleMission = arg('role-mission', '由扫码接入的新机器人，等待用户在群里分配角色');
+const roleResponsibilities = listArg('role-responsibilities');
+const roleConstraints = listArg('role-constraints');
+const handoffTo = listArg('handoff-to');
 const createGroup = args.includes('--no-group') ? false : true;
 const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
 const stateDir = join(dshHome, 'dsh-feishu-team');
@@ -157,8 +170,11 @@ async function tenantToken(appId, appSecret) {
         echo: false,
         runtime: 'subagent',
         role: {
-          name,
-          mission: '由扫码接入的新机器人，等待用户在群里分配角色',
+          name: roleName,
+          mission: roleMission,
+          ...(roleResponsibilities ? { responsibilities: roleResponsibilities } : {}),
+          ...(roleConstraints ? { constraints: roleConstraints } : {}),
+          ...(handoffTo ? { handoffTo } : {}),
         },
       });
       console.log('CONFIG_APPENDED=' + configFile);

@@ -24,7 +24,8 @@
     "./icon": "./icon.svg"
   },
   "bin": {
-    "dsh-feishu-team-onboard": "./bin/onboard.mjs"
+    "dsh-feishu-team-onboard": "./bin/onboard.mjs",
+    "dsh-feishu-team-role": "./bin/role.mjs"
   },
   "dsh": {
     "bundle": {
@@ -46,7 +47,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/unit.test.js test/controller.test.js",
+    "test": "node --test test/unit.test.js test/controller.test.js test/memory.test.js",
     "pack": "pnpm pack",
     "onboard": "node bin/onboard.mjs"
   }

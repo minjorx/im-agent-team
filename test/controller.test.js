@@ -165,3 +165,29 @@ test('a result receipt does not append a triggering footer', async () => {
   assert.equal(controller.decorateOutgoing(text), text);
   await rm(dir, { recursive: true, force: true });
 });
+
+test('/remember writes durable memory and /memory shows it', async () => {
+  const { controller, channel, dir } = await makeController();
+  await controller.handleInbound({
+    messageId: 'om_remember',
+    chatId: 'oc_test',
+    sender: { type: 'user', openId: 'ou_user', name: '张三' },
+    mentionedMe: true,
+    text: '/remember 项目代号 Apollo，交付截止周五',
+    mentions: [],
+    messageType: 'text',
+  });
+  assert.ok(controller.memory.entries.some((entry) => entry.text.includes('Apollo')));
+  await controller.handleInbound({
+    messageId: 'om_memory',
+    chatId: 'oc_test',
+    sender: { type: 'user', openId: 'ou_user', name: '张三' },
+    mentionedMe: true,
+    text: '/memory',
+    mentions: [],
+    messageType: 'text',
+  });
+  const text = channel.outbox.map((item) => JSON.parse(item.content).text || '').join('\n');
+  assert.match(text, /Apollo/);
+  await rm(dir, { recursive: true, force: true });
+});

@@ -77,7 +77,16 @@ outboundCount = 2   // 任务 + 转述
 - 因为 inbound kind = result，`decorateOutgoing` 不再追加触发用 footer；
 - researcher 的 `outboundCount` 保持 1，没有形成第三跳。
 
-## 5. 已知限制
+## 5. 角色与记忆
+
+- 角色字段：`name` / `mission` / `responsibilities` / `inputs` / `outputs` / `handoffTo` / `constraints` / `behavior`。
+- 角色可来自 `config.json`、`dsh-feishu-team-role` CLI、群内 `/role` 命令。
+- `behavior` 不设置时使用默认四条工作方式：任务合理性评估与反驳、主动补齐前置、主动推进、像真实同事一样工作。
+- 这些约束会进入 `dsh-native` 的系统提示分段，也会进入 `subagent` 每条消息的 prompt。
+- 团队记忆按 `appId + chatId` 存在 `state.json` 的 `memory` 字段；自动记录任务/产出/角色决策，`/remember` / `/memory` / `/forget` 手动管理。
+- `subagent` 运行时没有持久 Session，依靠团队记忆 + 最近 6 条对话摘要维持上下文；`dsh-native` 同时有 DSH Session 历史。
+
+## 6. 已知限制
 
 - `dsh-native` 根 Agent 模型收流异常（DSH 侧问题）；当前用 `subagent` 运行时规避。
 - `subagent` 模式没有持久会话，长对话依赖桥接层的历史摘要（最近 6 条）。
@@ -85,7 +94,7 @@ outboundCount = 2   // 任务 + 转述
 - 卡片交互、任务板、多运行时（ACP/SDK/Claude Code）尚未实现。
 - 角色卡广播目前是文本消息，尚未做成可编辑卡片。
 
-## 6. 开发与测试
+## 7. 开发与测试
 
 ```bash
 # 单元 + 控制器测试
@@ -110,13 +119,14 @@ dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
 { "action": "probe", "text": "只回复 OK" }
 ```
 
-## 7. 文件地图
+## 8. 文件地图
 
 | 文件 | 作用 |
 |---|---|
 | `index.js` | 插件入口、配置加载、binding 启动、调试工具 |
 | `lib/config.js` | 配置归一化与校验 |
 | `lib/team.js` | 绑定控制器、命令、交接、防环、p2p 邀请 |
+| `lib/memory.js` | 按 binding 持久化的团队记忆 |
 | `lib/roster.js` | 名册与同作用域 open_id 合并 |
 | `lib/guard.js` | hop / 冷却 / 指纹 / 预算 |
 | `lib/protocol.js` | 信封、富文本、分片、解析 |
@@ -124,3 +134,5 @@ dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
 | `lib/feishu/api.js` | tenant token、发消息、建群/拉人 |
 | `lib/runtime/dsh.js` | 常驻 Agent 运行时 |
 | `lib/runtime/subagent.js` | 子 Agent 兜底运行时 |
+| `bin/onboard.mjs` | 扫码创建应用 CLI |
+| `bin/role.mjs` | 角色配置 CLI |
