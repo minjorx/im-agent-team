@@ -34,9 +34,11 @@ lib/
 | 运行时 \ 渠道 | 飞书 | 其他渠道 |
 |---|---|---|
 | DSH | ✅ 首版 | 新增 channel 即可 |
-| Qoder / Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
+| Qoder | ✅ 可通过 Agent SDK / ACP / CLI 接入（待实现） | 后续 |
+| Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
 
 - 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
+- Qoder 接入可行性：[docs/qoder-integration.md](docs/qoder-integration.md)（结论：支持，推荐 Agent SDK，ACP 备选，CLI 用于 POC）。
 - 命名：包名定为 **`im-agent-team`**（IM + Agent + Team），内部核心目录为 `bridge-core`。npm 上 `agent-team` 已被占用，`im-agent-team` 当前可用；npm 注册暂不作为发布前提。
 
 ## 安装方式
