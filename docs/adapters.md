@@ -6,7 +6,7 @@
 |---|---|---|
 | DSH 原生 Agent | ✅ `runtimes/dsh/native.js` | 复用 bridge-core，新增 channel |
 | DSH 子 Agent | ✅ `runtimes/dsh/subagent.js` | 复用 bridge-core，新增 channel |
-| Qoder | ✅ 可接入：Agent SDK / ACP / CLI（待实现） | 后续 |
+| Qoder | ✅ Qoder Plugin 控制面已建（`qoder-plugin/`）；runtime/connector 待接 | 后续 |
 | Claude Code / Codex 等 | 复用 bridge-core，新增 runtime | 两者分别扩展 |
 
 核心原则：**bridge-core 不认识飞书，也不认识 DSH**；渠道适配层只负责“平台消息 ↔ 统一消息”，运行时适配层只负责“统一消息 ↔ Agent”。团队协议、名册、角色、记忆、防环全部在 bridge-core。

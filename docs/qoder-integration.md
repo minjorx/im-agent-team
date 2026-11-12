@@ -221,6 +221,46 @@ POC 顺序：
 
 下一步只需确认两件事：使用 **国际版还是 CN 版**，以及是否接受把 Qoder SDK 作为可选 peer dependency。确认后即可按 `lib/runtimes/qoder/` 实施。
 
+## 8. Qoder Plugin 落地（0.1）
+
+已在仓库中提供 `qoder-plugin/`，把控制面做成 Qoder 原生插件：
+
+```
+qoder-plugin/
+├── .qoder-plugin/plugin.json
+├── agents/feishu.md          # @feishu
+├── commands/connect.md       # /connect
+├── commands/status.md        # /status
+├── skills/feishu-bridge/     # Skill
+├── .mcp.json                 # 本地 MCP server
+└── bin/im-agent-team-mcp.mjs
+```
+
+已在本机通过：
+
+```bash
+qoder plugins validate qoder-plugin
+# components: skills 1, agents 1, commands 2, mcp-servers 1
+
+qoder plugins install qoder-plugin
+# im-agent-team@local v0.1.0, enabled
+```
+
+当前 MCP 工具：
+
+- `feishu_status`：读取本机 `~/.dsh/im-agent-team` 配置/状态；
+- `feishu_send`：通过已配置机器人发文本；
+- `feishu_connect`：检查配置，返回 onboarding 命令；
+- `feishu_disconnect`：说明如何停止 connector。
+
+**尚未实现**：常驻飞书 WebSocket + Qoder CLI/SDK 会话的 connector。当前 `feishu_connect` 只做配置检查与引导，不会假装已经连上。
+
+设计要点：
+
+- Qoder 的 `@` 选 Agent，`/` 选 Command/Plugin/Skill；所以插件同时提供 `agents/feishu.md` 和 `commands/connect.md`。
+- 第三方插件没有文档化的“把飞书消息注入当前 Qoder 对话”接口；connector 需要为飞书消息创建/恢复自己的 Qoder 会话，并把回复发回飞书。当前 Qoder 对话是控制面。
+- connector 实现后，插件整体仍是控制面 + 常驻进程；`@feishu` 负责初始化/状态，飞书负责实际协作。
+
 ## 参考
 
 - [Qoder Agent SDK 概述](https://docs.qoder.com/zh/cli/sdk/overview)

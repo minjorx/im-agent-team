@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "im-agent-team": {
+      "command": "im-agent-team-mcp",
+      "args": []
+    }
+  }
+}

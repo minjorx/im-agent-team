@@ -1,0 +1,247 @@
+#!/usr/bin/env node
+/**
+ * Minimal zero-dependency MCP server for the im-agent-team Qoder plugin.
+ *
+ * It is the control plane the @feishu agent talks to:
+ *   - feishu_status: read local im-agent-team config/state
+ *   - feishu_connect: start the onboarding instructions / check configuration
+ *   - feishu_send: send a text message through the configured Feishu bot
+ *   - feishu_disconnect: stop guidance
+ *
+ * The long-running Feishu WebSocket connector is a separate process and is not
+ * managed by this MCP server yet; this server never claims it is connected.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import readline from 'node:readline';
+
+const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
+const stateDir = join(dshHome, 'im-agent-team');
+const configFile = join(stateDir, 'config.json');
+const appsFile = join(stateDir, 'feishu-apps.json');
+const stateFile = join(stateDir, 'state.json');
+
+const TOOLS = [
+  {
+    name: 'feishu_status',
+    description: '查看本机 im-agent-team 的飞书机器人配置、绑定群和连接器状态。',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'feishu_connect',
+    description: '初始化/检查当前 Qoder 到飞书机器人的连接；未配置时返回 onboarding 命令。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '机器人显示名，默认 Qoder Agent' },
+        id: { type: 'string', description: '本地账号 id，默认 qoder' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'feishu_send',
+    description: '通过已配置的飞书机器人发送一条文本消息。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: '要发送的文本' },
+        chatId: { type: 'string', description: '目标群/会话 id；默认使用配置里的第一个群' },
+      },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'feishu_disconnect',
+    description: '说明如何断开/停止飞书连接器。',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+];
+
+function readJson(file) {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+function loadConfig() {
+  return readJson(configFile);
+}
+
+function loadState() {
+  return readJson(stateFile);
+}
+
+function apps() {
+  return readJson(appsFile)?.apps || [];
+}
+
+function accountSummary() {
+  const config = loadConfig();
+  const accounts = config?.accounts || [];
+  if (!accounts.length) return undefined;
+  return accounts.map((account) => {
+    const app = apps().find((item) => item.appId === account.appId || item.id === account.id);
+    return {
+      id: account.id,
+      name: account.role?.name || account.id,
+      appId: account.appId || app?.appId,
+      chats: account.chatIds || [],
+      runtime: account.runtime || 'dsh-native',
+    };
+  });
+}
+
+function statusText() {
+  const accounts = accountSummary();
+  const state = loadState();
+  const bindings = Object.keys(state?.bindings || {}).length;
+  if (!accounts) {
+    return [
+      '🔴 尚未配置飞书机器人。',
+      `配置目录：${stateDir}`,
+      '',
+      '下一步运行 onboarding（扫码创建/复用应用）：',
+      '  im-agent-team-onboard --name "Qoder Agent" --id qoder',
+      '或：node <im-agent-team>/bin/onboard.mjs --name "Qoder Agent" --id qoder',
+      '',
+      '当前 MCP 服务是控制面；长连接 connector 进程尚未由本插件托管。',
+    ].join('\n');
+  }
+  return [
+    `🟡 已配置 ${accounts.length} 个飞书机器人（控制面 MCP 在线）。`,
+    ...accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId} · 群：${account.chats.join(', ') || '未绑定'}`),
+    `本地状态 binding 数：${bindings}`,
+    '',
+    '注意：长连接 connector 进程尚未由本插件托管；当前只能做配置检查与主动发送。',
+  ].join('\n');
+}
+
+async function tenantToken(app) {
+  const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ app_id: app.appId, app_secret: app.appSecret }),
+  });
+  const data = await response.json();
+  if (data.code !== 0) throw new Error(`tenant token failed: ${data.code} ${data.msg}`);
+  return data.tenant_access_token;
+}
+
+async function sendText({ text, chatId }) {
+  const accounts = accountSummary();
+  if (!accounts?.length) throw new Error('尚未配置飞书机器人，请先运行 im-agent-team-onboard。');
+  const account = accounts.find((item) => item.chats.includes(chatId)) || accounts[0];
+  const target = chatId || account.chats[0];
+  if (!target) throw new Error('配置里没有 chatId，无法发送。');
+  const app = apps().find((item) => item.appId === account.appId || item.id === account.id);
+  if (!app?.appSecret) throw new Error(`找不到 ${account.id} 的 App Secret。`);
+  const token = await tenantToken(app);
+  const response = await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({ receive_id: target, msg_type: 'text', content: JSON.stringify({ text }) }),
+  });
+  const data = await response.json();
+  if (data.code !== 0) throw new Error(`send failed: ${data.code} ${data.msg}`);
+  return `已发送到 ${target}（message_id: ${data.data?.message_id || 'unknown'}）`;
+}
+
+function connectText({ name = 'Qoder Agent', id = 'qoder' } = {}) {
+  const accounts = accountSummary();
+  if (accounts?.length) {
+    return [
+      '🟡 本机已有飞书机器人配置：',
+      ...accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
+      '',
+      '控制面插件已加载。长连接 connector 进程尚未由本插件托管。',
+      '当前可以先用 feishu_send 主动发消息；实时收发需要下一步的 connector runtime。',
+    ].join('\n');
+  }
+  return [
+    '🔴 还没有飞书机器人配置。请在终端运行：',
+    '',
+    `  im-agent-team-onboard --name "${name}" --id ${id}`,
+    '',
+    '它会：1) 打印官方扫码链接；2) 创建应用并保存凭据；3) 自动创建测试群。',
+    '扫码完成后告诉我，我再调用 feishu_status 检查。',
+    '',
+    '当前 MCP 服务不会自己弹出二维码；二维码由 onboarding CLI 负责。',
+  ].join('\n');
+}
+
+async function callTool(name, args) {
+  switch (name) {
+    case 'feishu_status':
+      return statusText();
+    case 'feishu_connect':
+      return connectText(args);
+    case 'feishu_send':
+      return sendText(args);
+    case 'feishu_disconnect':
+      return '当前没有由 MCP 托管的 connector 进程。若已单独启动 connector，请结束对应进程；配置不会删除。';
+    default:
+      throw new Error(`unknown tool: ${name}`);
+  }
+}
+
+function send(message) {
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+rl.on('line', async (line) => {
+  if (!line.trim()) return;
+  let request;
+  try {
+    request = JSON.parse(line);
+  } catch {
+    return;
+  }
+  const { id, method, params } = request;
+  if (method === undefined) return;
+
+  if (method === 'initialize') {
+    send({
+      jsonrpc: '2.0',
+      id,
+      result: {
+        protocolVersion: params?.protocolVersion || '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'im-agent-team', version: '0.1.0' },
+      },
+    });
+    return;
+  }
+  if (method === 'notifications/initialized' || method === 'notifications/cancelled') return;
+  if (method === 'ping') {
+    if (id !== undefined) send({ jsonrpc: '2.0', id, result: {} });
+    return;
+  }
+  if (method === 'tools/list') {
+    send({ jsonrpc: '2.0', id, result: { tools: TOOLS } });
+    return;
+  }
+  if (method === 'tools/call') {
+    try {
+      const text = await callTool(params?.name, params?.arguments || {});
+      send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text }], isError: false } });
+    } catch (error) {
+      send({
+        jsonrpc: '2.0',
+        id,
+        result: { content: [{ type: 'text', text: `错误：${error?.message || error}` }], isError: true },
+      });
+    }
+    return;
+  }
+  if (id !== undefined) {
+    send({ jsonrpc: '2.0', id, error: { code: -32601, message: `method not found: ${method}` } });
+  }
+});
+
+console.error('[im-agent-team] MCP server ready');

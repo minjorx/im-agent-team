@@ -1,0 +1,11 @@
+{
+  "name": "im-agent-team",
+  "version": "0.1.0",
+  "displayName": "IM Agent Team",
+  "description": "Connect Qoder to a Feishu bot and run Qoder as a member of an IM agent team.",
+  "author": {
+    "name": "minjorx"
+  },
+  "license": "MIT",
+  "keywords": ["feishu", "im", "agent-team", "bridge", "multi-agent"]
+}

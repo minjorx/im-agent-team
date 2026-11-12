@@ -41,6 +41,25 @@ lib/
 - Qoder 接入可行性：[docs/qoder-integration.md](docs/qoder-integration.md)（结论：支持，推荐 Agent SDK，ACP 备选，CLI 用于 POC）。
 - 命名：包名定为 **`im-agent-team`**（IM + Agent + Team），内部核心目录为 `bridge-core`。npm 上 `agent-team` 已被占用，`im-agent-team` 当前可用；npm 注册暂不作为发布前提。
 
+## Qoder 插件
+
+`qoder-plugin/` 是同一套桥接层的 Qoder 插件形态：
+
+- `@feishu`：初始化、查看状态、发送测试消息；
+- `/connect`、`/status`：命令入口；
+- MCP 工具：`feishu_status`、`feishu_connect`、`feishu_send`、`feishu_disconnect`。
+
+安装：
+
+```bash
+qoder plugins install C:\path\to\im-agent-team\qoder-plugin
+qoder plugins validate C:\path\to\im-agent-team\qoder-plugin
+```
+
+或在 Qoder **Extensions → Plugins → Add Plugins → Upload Plugin** 上传 `im-agent-team-qoder-plugin-0.1.0.zip`。
+
+当前控制面已可用（状态/发送/连接引导）；实时飞书 WebSocket 连接器是下一步。详见 [qoder-plugin/README.md](qoder-plugin/README.md)。
+
 ## 安装方式
 
 ### 1. 从 npm 安装（推荐，需已发布）
