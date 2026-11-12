@@ -26,7 +26,8 @@ lib/
 ├── bridge-core/           # 协议、名册、角色、记忆、防环、控制器
 ├── channels/feishu/       # 飞书渠道适配层
 ├── channels/mock/         # 测试渠道
-└── runtimes/dsh/          # DSH 运行时适配层（native + subagent）
+├── runtimes/dsh/          # DSH 运行时适配层（native + subagent）
+└── runtimes/qoder/        # Qoder 运行时适配层（实验：CLI）
 ```
 
 目标矩阵：

@@ -53,7 +53,7 @@ Qoder 的 `@` 用于选择 **Agent**，`/` 用于选择 Plugin / Skill / Command
 `connector/` 已经实现：
 
 1. 维护飞书 WebSocket；
-2. 收到消息后调用 `qoder -p --output-format json`；
+2. 收到消息后调用 `lib/runtimes/qoder/cli.mjs`（`qoder -p --output-format json`）；
 3. 用 `--resume <session_id>` 维持每个群的会话；
 4. 把结果发回飞书。
 
@@ -62,6 +62,14 @@ Qoder 的 `@` 用于选择 **Agent**，`/` 用于选择 Plugin / Skill / Command
 - 需要 Qoder CLI 在 PATH 且已登录；
 - 这是开发/验证实现，不是最终纯插件方案；
 - 最终应替换为 Qoder Plugin SDK 的 `chatSessions.submit/read`。
+
+## 打包注意
+
+Qoder 运行时会位于仓库的 `lib/runtimes/qoder/`，插件 `connector/index.mjs` 通过相对路径导入它。
+
+- 在仓库内开发时，直接 `qoder plugins install qoder-plugin` 可以跑；
+- 打成可分发 ZIP 时，必须把 `lib/runtimes/qoder/` 一起放进插件包（例如 `runtime/qoder/`），并把 `connector/index.mjs` 的导入改为 `../runtime/qoder/...`；
+- 不要把仓库的 `lib/` 路径写死进分发包。
 
 ## 依赖
 

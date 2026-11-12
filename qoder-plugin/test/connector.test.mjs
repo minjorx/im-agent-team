@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorker, normalizeEvent, shouldHandle } from '../connector/worker.mjs';
-import { parseQoderOutput, runQoderCli } from '../connector/qoder-cli.mjs';
+import { createWorker, normalizeEvent, shouldHandle } from '../../lib/runtimes/qoder/worker.mjs';
+import { parseQoderOutput, runQoderCli } from '../../lib/runtimes/qoder/cli.mjs';
 
 const selfOpenId = 'ou_self';
 

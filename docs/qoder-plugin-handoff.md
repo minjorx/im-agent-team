@@ -38,6 +38,11 @@
 ### 2.2 当前插件文件
 
 ```
+lib/runtimes/qoder/
+├── cli.mjs                   # qoder -p / --resume
+├── prompt.mjs                # 角色/团队/记忆 prompt
+└── worker.mjs                # 消息 → Qoder → 回复
+
 qoder-plugin/
 ├── .qoder-plugin/plugin.json
 ├── agents/feishu.md          # @feishu
@@ -47,7 +52,7 @@ qoder-plugin/
 ├── .mcp.json                 # 本地 MCP server
 ├── bin/im-agent-team-mcp.mjs # 控制面 + 实验性连接器
 ├── bin/connector-cli.mjs     # 独立启动连接器（开发用）
-├── connector/                # 飞书 WS + qoder -p 实验实现
+├── connector/index.mjs       # 飞书 WS + 插件宿主
 └── test/connector.test.mjs
 ```
 
@@ -56,7 +61,7 @@ qoder-plugin/
 `qoder-plugin/connector/index.mjs` 目前：
 
 - 用 `@larksuiteoapi/node-sdk` 维护飞书 WebSocket；
-- 收到消息后调用 `qoder -p ... --output-format json`，解析 `result`；
+- 收到消息后调用 `lib/runtimes/qoder/cli.mjs`（`qoder -p ... --output-format json`）；
 - 用 `--resume <session_id>` 维持每个群的会话；
 - 把结果发回飞书。
 
@@ -174,12 +179,13 @@ Qoder 插件内的 MCP server / daemon
 
 1. `connector/index.mjs` 把 `runQoderCli` 替换为 `sdk.submit`；
 2. 保留飞书 WS、去重、会话映射、prompt 构建；
-3. 删除/隔离 `qoder-cli.mjs`，避免误用；
+3. 删除/隔离 `lib/runtimes/qoder/cli.mjs`，避免误用；
 4. 在干净机器上验收（只装 Qoder IDE，不装 Qoder CLI）。
 
 ### P3：打包与上架
 
 - 插件 ZIP 根目录包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`bin/`、`.mcp.json`、`node_modules`（飞书 SDK）；
+- 把 `lib/runtimes/qoder/` 复制为插件内的 `runtime/qoder/`，并把 `connector/index.mjs` 的导入从 `../../lib/runtimes/qoder/` 改为 `../runtime/qoder/`；
 - 走 QoderWork “设置 → 我的发布”或 Qoder CN `apphub-publications`；
 - 写清 SDK 权限用途、飞书权限、隐私说明。
 

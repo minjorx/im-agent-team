@@ -170,11 +170,15 @@ SDK 选择：
 
 ```
 lib/runtimes/qoder/
-├── sdk.js       # 主实现：Qoder Agent SDK
-├── acp.js       # 备选：ACP 客户端
-├── cli.js       # POC/兜底：headless CLI
-└── index.js     # flavor、SDK/二进制探测、统一入口
+├── cli.mjs       # 实验实现：qoder -p + --resume
+├── prompt.mjs    # 角色、团队、记忆 prompt
+└── worker.mjs    # 飞书消息 → Qoder → 回复
+
+qoder-plugin/
+└── connector/index.mjs   # 飞书 WS + 插件宿主，导入上面的 runtime
 ```
+
+目标方案（Plugin SDK 可用后）：把 `cli.mjs` 替换为 `chatSessions.submit/read`，`prompt/worker` 保留。
 
 `bridge-core` 不需要改协议、名册、记忆、防环；只在 `index.js` 的运行时工厂增加 `runtime: 'qoder'` 分支，以及 `config.js` 的 `qoder` 字段归一化。
 

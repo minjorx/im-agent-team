@@ -36,9 +36,13 @@ lib/
 │   └── mock/                 # 测试/本地渠道
 │       └── channel.js
 ├── runtimes/
-│   └── dsh/                  # DSH 运行时适配层
-│       ├── native.js         # ctx.agents 常驻 Agent
-│       └── subagent.js       # 子 Agent 兜底（每条消息一个子 Agent）
+│   ├── dsh/                  # DSH 运行时适配层
+│   │   ├── native.js         # ctx.agents 常驻 Agent
+│   │   └── subagent.js       # 子 Agent 兜底（每条消息一个子 Agent）
+│   └── qoder/                # Qoder 运行时适配层（实验：CLI）
+│       ├── cli.mjs           # qoder -p / --resume
+│       ├── prompt.mjs        # 角色/团队/记忆 prompt
+│       └── worker.mjs        # 消息 → Qoder → 回复
 └── index.js                  # 组合：bridge-core + channel + runtime
 ```
 
