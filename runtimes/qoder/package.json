@@ -1,12 +1,13 @@
 {
   "name": "qoder-plugin-im-agent-team",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Connector dependencies for the im-agent-team Qoder plugin.",
+  "description": "Qoder plugin for im-agent-team: connector, runtime and build script.",
   "scripts": {
     "test": "node --test test/connector.test.mjs",
-    "connector": "node bin/connector-cli.mjs"
+    "connector": "node bin/connector-cli.mjs",
+    "build": "node build.mjs"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.76.0"

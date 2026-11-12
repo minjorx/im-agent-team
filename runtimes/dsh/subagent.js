@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { DEFAULT_BEHAVIOR } from '../../bridge-core/prompt.js';
+import { DEFAULT_BEHAVIOR } from '../../lib/bridge-core/prompt.js';
 
 /**
  * Fallback runtime: one child Agent per inbound message, driven through the

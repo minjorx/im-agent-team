@@ -169,24 +169,27 @@ SDK 选择：
 新增：
 
 ```
-lib/runtimes/qoder/
-├── cli.mjs       # 实验实现：qoder -p + --resume
-├── prompt.mjs    # 角色、团队、记忆 prompt
-└── worker.mjs    # 飞书消息 → Qoder → 回复
-
-qoder-plugin/
-└── connector/index.mjs   # 飞书 WS + 插件宿主，导入上面的 runtime
+runtimes/qoder/
+├── runtime/
+│   ├── cli.mjs       # 实验实现：qoder -p + --resume
+│   ├── prompt.mjs    # 角色、团队、记忆 prompt
+│   └── worker.mjs    # 飞书消息 → Qoder → 回复
+├── connector/index.mjs   # 飞书 WS + 插件宿主
+├── .qoder-plugin/       # plugin.json
+├── agents/commands/skills/
+├── bin/                 # MCP server
+└── build.mjs            # 生成 Qoder 插件 ZIP
 ```
 
-目标方案（Plugin SDK 可用后）：把 `cli.mjs` 替换为 `chatSessions.submit/read`，`prompt/worker` 保留。
+目标方案（Plugin SDK 可用后）：把 `runtime/cli.mjs` 替换为 `chatSessions.submit/read`，`prompt/worker` 保留。
 
-`bridge-core` 不需要改协议、名册、记忆、防环；只在 `index.js` 的运行时工厂增加 `runtime: 'qoder'` 分支，以及 `config.js` 的 `qoder` 字段归一化。
+Qoder 是独立插件，不经过 DSH 的 `index.js` 运行时工厂；`bridge-core` 的协议/名册/记忆/防环可以复用。
 
 POC 顺序：
 
 1. 安装 Qoder CLI（国际版 `qoder` 或 CN 版 `qodercn`），完成登录/PAT；
 2. `qoder -p "只回复 OK" --output-format json` 验证认证与输出；
-3. 用 `--session-id` + 第二轮 prompt 验证会话恢复；
+3. 用 `--resume <session_id>` + 第二轮 prompt 验证会话恢复；
 4. 安装 SDK，在临时项目里跑 `query()` 一次性与多轮；
 5. 实现 `QoderRuntime`，用 `channels/mock` 跑 bridge e2e；
 6. 在真实飞书群接入一个 Qoder bot，验证 @、回传、防环；
@@ -223,31 +226,42 @@ POC 顺序：
 - POC 先用 **headless CLI** 验证认证和输出，成本最低；
 - 不建议把 MCP 或 IDE 插件体系当作主接入方式。
 
-下一步只需确认两件事：使用 **国际版还是 CN 版**，以及是否接受把 Qoder SDK 作为可选 peer dependency。确认后即可按 `lib/runtimes/qoder/` 实施。
+下一步只需确认：使用 **国际版还是 CN 版**，以及是否接受 Qoder 内部 Plugin SDK 作为实现依赖。确认后即可按 `runtimes/qoder/` 实施。
 
 ## 8. Qoder Plugin 落地（0.1）
 
-已在仓库中提供 `qoder-plugin/`，把控制面做成 Qoder 原生插件：
+已在仓库中提供 `runtimes/qoder/`，把控制面和实验连接器做成 Qoder 原生插件：
 
 ```
-qoder-plugin/
+runtimes/qoder/
 ├── .qoder-plugin/plugin.json
 ├── agents/feishu.md          # @feishu
 ├── commands/connect.md       # /connect
 ├── commands/status.md        # /status
 ├── skills/feishu-bridge/     # Skill
 ├── .mcp.json                 # 本地 MCP server
-└── bin/im-agent-team-mcp.mjs
+├── bin/im-agent-team-mcp.mjs
+├── connector/index.mjs       # 飞书 WS + 插件宿主
+├── runtime/                  # Qoder CLI 运行时（实验）
+└── build.mjs                 # 生成插件 ZIP
 ```
 
 已在本机通过：
 
 ```bash
-qoder plugins validate qoder-plugin
+qoder plugins validate runtimes/qoder
 # components: skills 1, agents 1, commands 2, mcp-servers 1
 
-qoder plugins install qoder-plugin
-# im-agent-team@local v0.1.0, enabled
+qoder plugins install runtimes/qoder
+# im-agent-team@local v0.2.0, enabled
+```
+
+打包：
+
+```bash
+cd runtimes/qoder
+node build.mjs
+# → dist/im-agent-team-qoder-plugin-0.2.0.zip
 ```
 
 当前 MCP 工具：

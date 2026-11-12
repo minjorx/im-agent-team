@@ -244,7 +244,7 @@ rl.on('line', async (line) => {
       result: {
         protocolVersion: params?.protocolVersion || '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'im-agent-team', version: '0.1.0' },
+        serverInfo: { name: 'im-agent-team', version: '0.2.0' },
       },
     });
     return;

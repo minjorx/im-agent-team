@@ -22,12 +22,14 @@
 代码已按“与平台/Agent 无关的 bridge-core + 可替换适配层”分层：
 
 ```
-lib/
+lib/                        # 适配层（与具体 AI 工具无关）
 ├── bridge-core/           # 协议、名册、角色、记忆、防环、控制器
 ├── channels/feishu/       # 飞书渠道适配层
-├── channels/mock/         # 测试渠道
-├── runtimes/dsh/          # DSH 运行时适配层（native + subagent）
-└── runtimes/qoder/        # Qoder 运行时适配层（实验：CLI）
+└── channels/mock/         # 测试渠道
+
+runtimes/                   # 具体 AI 工具的实现，可分别打包成插件
+├── dsh/                   # DSH 原生/子 Agent 运行时
+└── qoder/                 # Qoder 插件 + CLI 实验运行时
 ```
 
 目标矩阵：
@@ -35,7 +37,7 @@ lib/
 | 运行时 \ 渠道 | 飞书 | 其他渠道 |
 |---|---|---|
 | DSH | ✅ 首版 | 新增 channel 即可 |
-| Qoder | ✅ 可通过 Agent SDK / ACP / CLI 接入（待实现） | 后续 |
+| Qoder | 🟡 插件控制面已建，纯插件 connector 待 SDK | 后续 |
 | Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
 
 - 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
@@ -44,7 +46,7 @@ lib/
 
 ## Qoder 插件
 
-`qoder-plugin/` 是同一套桥接层的 Qoder 插件形态：
+`runtimes/qoder/` 是同一套桥接层的 Qoder 插件实现：
 
 - `@feishu`：初始化、查看状态、发送测试消息；
 - `/connect`、`/status`：命令入口；
@@ -53,13 +55,21 @@ lib/
 安装：
 
 ```bash
-qoder plugins install C:\path\to\im-agent-team\qoder-plugin
-qoder plugins validate C:\path\to\im-agent-team\qoder-plugin
+qoder plugins install C:\path\to\im-agent-team\runtimes\qoder
+qoder plugins validate C:\path\to\im-agent-team\runtimes\qoder
 ```
 
-或在 Qoder **Extensions → Plugins → Add Plugins → Upload Plugin** 上传 `im-agent-team-qoder-plugin-0.1.0.zip`。
+打包：
 
-当前控制面已可用（状态/发送/连接引导）；实时连接器是依赖 Qoder CLI 的实验版，纯插件方案待 Qoder Plugin SDK。详见 [qoder-plugin/README.md](qoder-plugin/README.md) 和 [Qoder 纯插件交接文档](docs/qoder-plugin-handoff.md)。
+```bash
+cd runtimes/qoder
+node build.mjs
+# → dist/im-agent-team-qoder-plugin-0.2.0.zip
+```
+
+或在 Qoder **Extensions → Plugins → Add Plugins → Upload Plugin** 上传 ZIP。
+
+当前控制面已可用（状态/发送/连接引导）；实时连接器是依赖 Qoder CLI 的实验版，纯插件方案待 Qoder Plugin SDK。详见 [runtimes/qoder/README.md](runtimes/qoder/README.md) 和 [Qoder 纯插件交接文档](docs/qoder-plugin-handoff.md)。
 
 ## 安装方式
 

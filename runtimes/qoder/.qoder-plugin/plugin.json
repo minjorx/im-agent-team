@@ -1,6 +1,6 @@
 {
   "name": "im-agent-team",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "displayName": "IM Agent Team",
   "description": "Connect Qoder to a Feishu bot and run Qoder as a member of an IM agent team.",
   "author": {

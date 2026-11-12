@@ -6,7 +6,7 @@
 |---|---|---|
 | DSH 原生 Agent | ✅ `runtimes/dsh/native.js` | 复用 bridge-core，新增 channel |
 | DSH 子 Agent | ✅ `runtimes/dsh/subagent.js` | 复用 bridge-core，新增 channel |
-| Qoder | ✅ Qoder Plugin 控制面已建（`qoder-plugin/`）；runtime/connector 待接 | 后续 |
+| Qoder | 🟡 Qoder 插件控制面已建（`runtimes/qoder/`）；纯插件 connector 待 Plugin SDK | 后续 |
 | Claude Code / Codex 等 | 复用 bridge-core，新增 runtime | 两者分别扩展 |
 
 核心原则：**bridge-core 不认识飞书，也不认识 DSH**；渠道适配层只负责“平台消息 ↔ 统一消息”，运行时适配层只负责“统一消息 ↔ Agent”。团队协议、名册、角色、记忆、防环全部在 bridge-core。
@@ -16,34 +16,41 @@ Qoder 的可行性已单独调研：[docs/qoder-integration.md](qoder-integratio
 ## 目录
 
 ```
-lib/
-├── bridge-core/              # 与平台、Agent 无关
-│   ├── config.js             # 配置归一化
+lib/                          # 适配层：与具体 AI 工具无关
+├── bridge-core/              # 协议、名册、角色、记忆、防环、控制器
+│   ├── config.js
 │   ├── contracts.js          # ChannelAdapter / AgentRuntime 契约
-│   ├── dedup.js              # 消息幂等
-│   ├── guard.js              # hop / 冷却 / 指纹 / 预算
-│   ├── memory.js             # 按 binding 的持久团队记忆
-│   ├── prompt.js             # 身份、名册、协议、工作方式、记忆提示词
-│   ├── protocol.js           # trace/hop 信封、富文本、分片、解析
-│   ├── roster.js             # 名册与 open_id 合并
-│   ├── store.js              # 原子 JSON 状态
-│   └── team.js               # 绑定控制器：命令、交接、防环、记忆
-├── channels/
-│   ├── feishu/               # 飞书渠道适配层
-│   │   ├── api.js            # tenant token / OpenAPI
-│   │   ├── channel.js        # WSClient 长连接 + 发送
-│   │   └── normalize.js      # 事件 → InboundMessage
-│   └── mock/                 # 测试/本地渠道
-│       └── channel.js
-├── runtimes/
-│   ├── dsh/                  # DSH 运行时适配层
-│   │   ├── native.js         # ctx.agents 常驻 Agent
-│   │   └── subagent.js       # 子 Agent 兜底（每条消息一个子 Agent）
-│   └── qoder/                # Qoder 运行时适配层（实验：CLI）
-│       ├── cli.mjs           # qoder -p / --resume
-│       ├── prompt.mjs        # 角色/团队/记忆 prompt
-│       └── worker.mjs        # 消息 → Qoder → 回复
-└── index.js                  # 组合：bridge-core + channel + runtime
+│   ├── dedup.js
+│   ├── guard.js
+│   ├── memory.js
+│   ├── prompt.js
+│   ├── protocol.js
+│   ├── roster.js
+│   ├── store.js
+│   └── team.js
+└── channels/
+    ├── feishu/               # 飞书渠道适配层
+    │   ├── api.js
+    │   ├── channel.js
+    │   └── normalize.js
+    └── mock/
+        └── channel.js
+
+runtimes/                     # 具体 AI 工具实现，可分别打包
+├── dsh/                      # DSH bundle
+│   ├── native.js             # ctx.agents 常驻 Agent
+│   └── subagent.js           # 子 Agent 兜底
+└── qoder/                    # Qoder 插件
+    ├── .qoder-plugin/        # plugin.json
+    ├── agents/               # @feishu
+    ├── commands/             # /connect /status
+    ├── skills/
+    ├── bin/                  # MCP server
+    ├── connector/            # 飞书 WS + 插件宿主
+    ├── runtime/              # Qoder CLI 运行时（实验）
+    └── build.mjs             # 生成 Qoder 插件 ZIP
+
+index.js                      # DSH 插件入口（组合 lib + runtimes/dsh）
 ```
 
 ## 渠道契约
@@ -74,11 +81,12 @@ lib/
 
 新增运行时步骤：
 
-1. 新建 `lib/runtimes/<tool>/`；
+1. 新建 `runtimes/<tool>/`；
 2. 实现上述方法；
 3. 在 `index.js` 的运行时工厂里增加分支；
 4. 账号配置增加 `runtime: '<id>'`；
-5. 用 mock runtime 验证 bridge-core 的协作流程。
+5. 用 mock runtime 验证 bridge-core 的协作流程；
+6. 给该 runtime 增加自己的 `build.mjs`，产出目标 AI 工具能安装的 ZIP/包。
 
 ## 命名与迁移
 

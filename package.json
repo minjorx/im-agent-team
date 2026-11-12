@@ -50,6 +50,7 @@
     "index.js",
     "cordis.patch.yml",
     "lib",
+    "runtimes/dsh",
     "bin",
     "locale/*.json",
     "icon.svg",

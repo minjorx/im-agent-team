@@ -23,9 +23,9 @@
   - `qoder -p "只回复 OK" --output-format json` 返回 `{"result":"OK",...}`
   - `--resume <session_id>` 能记住上一轮内容。
 - Qoder 插件 `im-agent-team@local v0.1.0` 已安装并启用：
-  - `qoder plugins validate qoder-plugin`
+  - `qoder plugins validate runtimes/qoder`
     - components: `skills 1, agents 1, commands 2, mcp-servers 1`
-  - `qoder plugins install qoder-plugin`
+  - `qoder plugins install runtimes/qoder`
     - `im-agent-team@local v0.1.0`, enabled
   - `qoder plugins list` 可见。
 - MCP 控制面已验证：
@@ -33,17 +33,17 @@
   - `feishu_send` 可通过已配置机器人发文本；
   - `feishu_connect` 当前会启动 CLI 连接器（实验性，非目标）。
 - 连接器单元测试：6 个通过。
-  - `node --test qoder-plugin/test/connector.test.mjs`
+  - `node --test runtimes/qoder/test/connector.test.mjs`
 
 ### 2.2 当前插件文件
 
 ```
-lib/runtimes/qoder/
+runtimes/qoder/runtime/
 ├── cli.mjs                   # qoder -p / --resume
 ├── prompt.mjs                # 角色/团队/记忆 prompt
 └── worker.mjs                # 消息 → Qoder → 回复
 
-qoder-plugin/
+runtimes/qoder/
 ├── .qoder-plugin/plugin.json
 ├── agents/feishu.md          # @feishu
 ├── commands/connect.md       # /connect
@@ -53,15 +53,17 @@ qoder-plugin/
 ├── bin/im-agent-team-mcp.mjs # 控制面 + 实验性连接器
 ├── bin/connector-cli.mjs     # 独立启动连接器（开发用）
 ├── connector/index.mjs       # 飞书 WS + 插件宿主
+├── runtime/                  # Qoder CLI 运行时
+├── build.mjs                 # 生成插件 ZIP
 └── test/connector.test.mjs
 ```
 
 ### 2.3 当前连接器为什么不合格
 
-`qoder-plugin/connector/index.mjs` 目前：
+`runtimes/qoder/connector/index.mjs` 目前：
 
 - 用 `@larksuiteoapi/node-sdk` 维护飞书 WebSocket；
-- 收到消息后调用 `lib/runtimes/qoder/cli.mjs`（`qoder -p ... --output-format json`）；
+- 收到消息后调用 `runtimes/qoder/runtime/cli.mjs`（`qoder -p ... --output-format json`）；
 - 用 `--resume <session_id>` 维持每个群的会话；
 - 把结果发回飞书。
 
@@ -166,7 +168,7 @@ Qoder 插件内的 MCP server / daemon
 
 ### P1：最小可行插件
 
-1. 在 `qoder-plugin/` 增加一个 `sdk-bridge.mjs`，只做：
+1. 在 `runtimes/qoder/` 增加一个 `sdk-bridge.mjs`，只做：
    - `submit(sessionId, text)`；
    - `read(sessionId)`；
    - 失败时返回明确错误。
@@ -179,13 +181,14 @@ Qoder 插件内的 MCP server / daemon
 
 1. `connector/index.mjs` 把 `runQoderCli` 替换为 `sdk.submit`；
 2. 保留飞书 WS、去重、会话映射、prompt 构建；
-3. 删除/隔离 `lib/runtimes/qoder/cli.mjs`，避免误用；
+3. 删除/隔离 `runtimes/qoder/runtime/cli.mjs`，避免误用；
 4. 在干净机器上验收（只装 Qoder IDE，不装 Qoder CLI）。
 
 ### P3：打包与上架
 
-- 插件 ZIP 根目录包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`bin/`、`.mcp.json`、`node_modules`（飞书 SDK）；
-- 把 `lib/runtimes/qoder/` 复制为插件内的 `runtime/qoder/`，并把 `connector/index.mjs` 的导入从 `../../lib/runtimes/qoder/` 改为 `../runtime/qoder/`；
+- 插件 ZIP 通过 `cd runtimes/qoder && node build.mjs` 生成；
+- ZIP 根目录包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`bin/`、`connector/`、`runtime/`、`.mcp.json`、`node_modules`（飞书 SDK）；
+- `build.mjs` 会自动把 `runtime/` 和 `node_modules` 放进 staging，不需要手工复制；
 - 走 QoderWork “设置 → 我的发布”或 Qoder CN `apphub-publications`；
 - 写清 SDK 权限用途、飞书权限、隐私说明。
 
@@ -216,16 +219,16 @@ Qoder 插件内的 MCP server / daemon
 
 ```bash
 # 校验/安装插件
-qoder plugins validate qoder-plugin
-qoder plugins install qoder-plugin
+qoder plugins validate runtimes/qoder
+qoder plugins install runtimes/qoder
 qoder plugins list
 
 # 连接器单测
-node --test qoder-plugin/test/connector.test.mjs
+node --test runtimes/qoder/test/connector.test.mjs
 
 # MCP 控制面 handshake（不启动连接器）
 # 依次输入 initialize / tools/list / tools/call feishu_status
-node qoder-plugin/bin/im-agent-team-mcp.mjs
+node runtimes/qoder/bin/im-agent-team-mcp.mjs
 ```
 
 MCP 请求示例：
@@ -241,5 +244,5 @@ MCP 请求示例：
 - 不要在生产插件里硬编码 App Secret、PAT 或群 ID。
 - 不要把逆向得到的内部 endpoint 协议直接发布；Qoder 更新会破坏，且有合规风险。
 - 插件 ZIP 若包含 `node_modules`，注意体积与许可证；飞书 SDK 是 MIT/Apache 系，Qoder Agent SDK 是 `SEE LICENSE IN LICENSE`，不要打包进 MIT 插件。
-- 当前 `qoder-plugin/connector/` 依赖 Qoder CLI，仅用于验证，不应作为最终交付。
+- 当前 `runtimes/qoder/connector/` 依赖 Qoder CLI，仅用于验证，不应作为最终交付。
 - Qoder 插件 SDK 授权按 scope 生效，未来方法也会在授权范围内；上架时要向用户说明。

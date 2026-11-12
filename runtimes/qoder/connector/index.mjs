@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as Lark from '@larksuiteoapi/node-sdk';
-import { createWorker } from '../../lib/runtimes/qoder/worker.mjs';
-import { runQoderCli } from '../../lib/runtimes/qoder/cli.mjs';
+import { createWorker } from '../runtime/worker.mjs';
+import { runQoderCli } from '../runtime/cli.mjs';
 
 const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
 const stateDir = join(dshHome, 'im-agent-team');

@@ -10,14 +10,14 @@
 
 Qoder IDE：
 
-1. 把本目录打成 zip（根目录直接包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`bin/`、`.mcp.json`）；
+1. 在 `runtimes/qoder` 里执行 `node build.mjs`，产出 `dist/im-agent-team-qoder-plugin-0.2.0.zip`；
 2. **Extensions → Plugins → Add Plugins → Upload Plugin** 选择 zip；
 3. 安装后新开任务，输入 `@feishu` 或 `/connect`。
 
 Qoder CLI：
 
 ```bash
-qoder plugins install C:\path\to\qoder-plugin
+qoder plugins install C:\path\to\im-agent-team\runtimes\qoder
 qoder plugins list
 ```
 
@@ -38,7 +38,7 @@ qoder plugins list
 当前卡点不是插件开发入口，而是 Qoder 的 Plugin SDK 没有公开文档：
 内部存在 `chatSessions.submit` / `chatSessions.read` scope，但没有公开声明方式和客户端 API。
 
-交接文档：[docs/qoder-plugin-handoff.md](../docs/qoder-plugin-handoff.md)
+交接文档：[docs/qoder-plugin-handoff.md](../../docs/qoder-plugin-handoff.md)
 
 ## 为什么不是“@插件”
 
@@ -53,7 +53,7 @@ Qoder 的 `@` 用于选择 **Agent**，`/` 用于选择 Plugin / Skill / Command
 `connector/` 已经实现：
 
 1. 维护飞书 WebSocket；
-2. 收到消息后调用 `lib/runtimes/qoder/cli.mjs`（`qoder -p --output-format json`）；
+2. 收到消息后调用 `runtime/cli.mjs`（`qoder -p --output-format json`）；
 3. 用 `--resume <session_id>` 维持每个群的会话；
 4. 把结果发回飞书。
 
@@ -63,13 +63,26 @@ Qoder 的 `@` 用于选择 **Agent**，`/` 用于选择 Plugin / Skill / Command
 - 这是开发/验证实现，不是最终纯插件方案；
 - 最终应替换为 Qoder Plugin SDK 的 `chatSessions.submit/read`。
 
-## 打包注意
+## 打包
 
-Qoder 运行时会位于仓库的 `lib/runtimes/qoder/`，插件 `connector/index.mjs` 通过相对路径导入它。
+`build.mjs` 会生成自包含的插件 ZIP：
 
-- 在仓库内开发时，直接 `qoder plugins install qoder-plugin` 可以跑；
-- 打成可分发 ZIP 时，必须把 `lib/runtimes/qoder/` 一起放进插件包（例如 `runtime/qoder/`），并把 `connector/index.mjs` 的导入改为 `../runtime/qoder/...`；
-- 不要把仓库的 `lib/` 路径写死进分发包。
+```bash
+cd runtimes/qoder
+node build.mjs
+# dist/im-agent-team-qoder-plugin-0.2.0.zip
+```
+
+ZIP 内包含：
+
+- `.qoder-plugin/`、`agents/`、`commands/`、`skills/`
+- `bin/` MCP server
+- `connector/` 飞书 WS
+- `runtime/` Qoder CLI 运行时
+- `node_modules/` 飞书 SDK
+- `.mcp.json`
+
+`connector/index.mjs` 通过 `../runtime/...` 导入运行时，源目录和打包后结构一致。
 
 ## 依赖
 

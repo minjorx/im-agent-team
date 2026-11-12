@@ -102,8 +102,8 @@ node --test test/unit.test.js test/controller.test.js test/memory.test.js
 
 # 语法检查
 node --check index.js
-node --check lib/runtimes/dsh/native.js
-node --check lib/runtimes/dsh/subagent.js
+node --check runtimes/dsh/native.js
+node --check runtimes/dsh/subagent.js
 
 # 本地安装（当前 profile）
 dsh plugin --profile desktop add C:/path/to/im-agent-team
@@ -134,8 +134,8 @@ dsh plugin --profile desktop add C:/path/to/im-agent-team
 | `lib/bridge-core/prompt.js` | 身份、名册、协议、工作方式、记忆提示词 |
 | `lib/channels/feishu/channel.js` | 长连接与事件归一化 |
 | `lib/channels/feishu/api.js` | tenant token、发消息、建群/拉人 |
-| `lib/runtimes/dsh/native.js` | 常驻 Agent 运行时 |
-| `lib/runtimes/dsh/subagent.js` | 子 Agent 兜底运行时 |
+| `runtimes/dsh/native.js` | 常驻 Agent 运行时 |
+| `runtimes/dsh/subagent.js` | 子 Agent 兜底运行时 |
 | `bin/onboard.mjs` | 扫码创建应用 CLI |
 | `bin/role.mjs` | 角色配置 CLI |
 | `docs/adapters.md` | 分层、契约与新增渠道/运行时的步骤 |
