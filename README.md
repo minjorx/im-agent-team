@@ -19,11 +19,11 @@
 
 ## 架构与目录（core + adapters）
 
-代码已按“与平台/Agent 无关的 core + 可替换适配层”分层：
+代码已按“与平台/Agent 无关的 bridge-core + 可替换适配层”分层：
 
 ```
 lib/
-├── core/                  # 协议、名册、角色、记忆、防环、控制器
+├── bridge-core/           # 协议、名册、角色、记忆、防环、控制器
 ├── channels/feishu/       # 飞书渠道适配层
 ├── channels/mock/         # 测试渠道
 └── runtimes/dsh/          # DSH 运行时适配层（native + subagent）
@@ -37,7 +37,7 @@ lib/
 | Qoder / Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
 
 - 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
-- 命名建议：仓库/包名用 **`dsh-agent-bridge`**（不绑定飞书，也不绑定 DSH 单一运行时）。当前 v0.1 包名仍是 `dsh-feishu-team`，避免破坏已安装实例；v0.2 再做包名与状态目录迁移，步骤写在 adapters 文档里。
+- 命名：项目 umbrella 可以用 `agent-team`，但 npm 的 `agent-team` 已被占用，建议仓库/包名用 **`agent-team-bridge`**（或 scoped `@你的scope/agent-team`）；内部核心目录已定为 `bridge-core`。当前 v0.1 包名仍是 `dsh-feishu-team`，避免破坏已安装实例；v0.2 再做迁移，步骤见 [docs/adapters.md](docs/adapters.md)。
 
 ## 安装方式
 

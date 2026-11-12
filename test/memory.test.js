@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JsonStore } from '../lib/core/store.js';
-import { MemoryStore } from '../lib/core/memory.js';
+import { JsonStore } from '../lib/bridge-core/store.js';
+import { MemoryStore } from '../lib/bridge-core/memory.js';
 
 test('memory records entries, deduplicates and renders a summary', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-memory-'));

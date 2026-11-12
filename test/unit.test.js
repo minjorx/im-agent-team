@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildFooter, flattenPost, parseFooter, renderMentionPost, splitText, stripOwnMention } from '../lib/core/protocol.js';
-import { Roster } from '../lib/core/roster.js';
-import { HandoffGuard } from '../lib/core/guard.js';
-import { Dedup } from '../lib/core/dedup.js';
-import { normalizeConfig } from '../lib/core/config.js';
+import { buildFooter, flattenPost, parseFooter, renderMentionPost, splitText, stripOwnMention } from '../lib/bridge-core/protocol.js';
+import { Roster } from '../lib/bridge-core/roster.js';
+import { HandoffGuard } from '../lib/bridge-core/guard.js';
+import { Dedup } from '../lib/bridge-core/dedup.js';
+import { normalizeConfig } from '../lib/bridge-core/config.js';
 import { normalizeFeishuMessage } from '../lib/channels/feishu/normalize.js';
-import { DEFAULT_BEHAVIOR, buildIdentityPrompt } from '../lib/core/prompt.js';
+import { DEFAULT_BEHAVIOR, buildIdentityPrompt } from '../lib/bridge-core/prompt.js';
 
 test('footer round-trips and strips from text', () => {
   const footer = buildFooter({ trace: 'T-1', hop: 2, kind: 'task', taskId: 'T-1-2' });

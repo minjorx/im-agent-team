@@ -124,14 +124,14 @@ dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
 | 文件 | 作用 |
 |---|---|
 | `index.js` | 插件入口、配置加载、binding 启动、调试工具 |
-| `lib/core/config.js` | 配置归一化与校验 |
-| `lib/core/contracts.js` | ChannelAdapter / AgentRuntime 契约 |
-| `lib/core/team.js` | 绑定控制器、命令、交接、防环、p2p 邀请 |
-| `lib/core/memory.js` | 按 binding 持久化的团队记忆 |
-| `lib/core/roster.js` | 名册与同作用域 open_id 合并 |
-| `lib/core/guard.js` | hop / 冷却 / 指纹 / 预算 |
-| `lib/core/protocol.js` | 信封、富文本、分片、解析 |
-| `lib/core/prompt.js` | 身份、名册、协议、工作方式、记忆提示词 |
+| `lib/bridge-core/config.js` | 配置归一化与校验 |
+| `lib/bridge-core/contracts.js` | ChannelAdapter / AgentRuntime 契约 |
+| `lib/bridge-core/team.js` | 绑定控制器、命令、交接、防环、p2p 邀请 |
+| `lib/bridge-core/memory.js` | 按 binding 持久化的团队记忆 |
+| `lib/bridge-core/roster.js` | 名册与同作用域 open_id 合并 |
+| `lib/bridge-core/guard.js` | hop / 冷却 / 指纹 / 预算 |
+| `lib/bridge-core/protocol.js` | 信封、富文本、分片、解析 |
+| `lib/bridge-core/prompt.js` | 身份、名册、协议、工作方式、记忆提示词 |
 | `lib/channels/feishu/channel.js` | 长连接与事件归一化 |
 | `lib/channels/feishu/api.js` | tenant token、发消息、建群/拉人 |
 | `lib/runtimes/dsh/native.js` | 常驻 Agent 运行时 |
