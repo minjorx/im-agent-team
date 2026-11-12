@@ -12,3 +12,5 @@ docs/onboard-qr.png
 docs/onboard-result.json
 tools/
 im-agent-team-qoder-plugin-*.zip
+qoder-plugin/node_modules/
+qoder-plugin/*.tgz

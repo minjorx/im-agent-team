@@ -250,10 +250,14 @@ qoder plugins install qoder-plugin
 
 - `feishu_status`：读取本机 `~/.dsh/im-agent-team` 配置/状态；
 - `feishu_send`：通过已配置机器人发文本；
-- `feishu_connect`：检查配置，返回 onboarding 命令；
-- `feishu_disconnect`：说明如何停止 connector。
+- `feishu_connect`：有对应账号时启动实验性连接器；无账号时返回 onboarding 命令；
+- `feishu_disconnect`：停止连接器。
 
-**尚未实现**：常驻飞书 WebSocket + Qoder CLI/SDK 会话的 connector。当前 `feishu_connect` 只做配置检查与引导，不会假装已经连上。
+**实验版**：常驻飞书 WebSocket + `qoder -p` 会话 + 回复飞书的 connector 已实现，但依赖 Qoder CLI 在 PATH 且已登录。它不符合“纯插件、无 CLI”的目标，只作为验证代码。
+
+**目标方案**：改用 Qoder Plugin SDK 的 `chatSessions.submit/read`，让插件直接驱动 Qoder 会话。该能力在 Qoder 内部存在（consent scope 可在 `app.asar` 中找到），但没有公开文档/API。
+
+详见 [Qoder 纯插件交接文档](qoder-plugin-handoff.md)。
 
 设计要点：
 

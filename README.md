@@ -58,7 +58,7 @@ qoder plugins validate C:\path\to\im-agent-team\qoder-plugin
 
 或在 Qoder **Extensions → Plugins → Add Plugins → Upload Plugin** 上传 `im-agent-team-qoder-plugin-0.1.0.zip`。
 
-当前控制面已可用（状态/发送/连接引导）；实时飞书 WebSocket 连接器是下一步。详见 [qoder-plugin/README.md](qoder-plugin/README.md)。
+当前控制面已可用（状态/发送/连接引导）；实时连接器是依赖 Qoder CLI 的实验版，纯插件方案待 Qoder Plugin SDK。详见 [qoder-plugin/README.md](qoder-plugin/README.md) 和 [Qoder 纯插件交接文档](docs/qoder-plugin-handoff.md)。
 
 ## 安装方式
 

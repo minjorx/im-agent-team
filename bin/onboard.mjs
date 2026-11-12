@@ -10,6 +10,7 @@
  * appends the new account to config.json.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import QRCode from 'qrcode';
 import { resolveStateDir } from '../lib/bridge-core/state-dir.js';
 

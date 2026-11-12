@@ -97,28 +97,43 @@ function accountSummary() {
 }
 
 function statusText() {
+  return statusTextAsync();
+}
+
+async function statusTextAsync() {
   const accounts = accountSummary();
   const state = loadState();
   const bindings = Object.keys(state?.bindings || {}).length;
+  const lines = [];
   if (!accounts) {
-    return [
+    lines.push(
       '🔴 尚未配置飞书机器人。',
       `配置目录：${stateDir}`,
       '',
       '下一步运行 onboarding（扫码创建/复用应用）：',
       '  im-agent-team-onboard --name "Qoder Agent" --id qoder',
       '或：node <im-agent-team>/bin/onboard.mjs --name "Qoder Agent" --id qoder',
-      '',
-      '当前 MCP 服务是控制面；长连接 connector 进程尚未由本插件托管。',
-    ].join('\n');
+    );
+  } else {
+    lines.push(
+      `🟡 已配置 ${accounts.length} 个飞书机器人。`,
+      ...accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId} · 群：${account.chats.join(', ') || '未绑定'}`),
+      `本地状态 binding 数：${bindings}`,
+    );
   }
-  return [
-    `🟡 已配置 ${accounts.length} 个飞书机器人（控制面 MCP 在线）。`,
-    ...accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId} · 群：${account.chats.join(', ') || '未绑定'}`),
-    `本地状态 binding 数：${bindings}`,
-    '',
-    '注意：长连接 connector 进程尚未由本插件托管；当前只能做配置检查与主动发送。',
-  ].join('\n');
+  try {
+    const { getStatus } = await connector();
+    const status = getStatus();
+    lines.push(
+      '',
+      `连接器：${status.running ? '🟢 running' : '⚪ stopped'}`,
+      ...status.accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
+    );
+    if (status.lastError) lines.push(`最近错误：${status.lastError}`);
+  } catch (error) {
+    lines.push('', `连接器：不可用（${error?.message || error}）`);
+  }
+  return lines.join('\n');
 }
 
 async function tenantToken(app) {
@@ -151,39 +166,56 @@ async function sendText({ text, chatId }) {
   return `已发送到 ${target}（message_id: ${data.data?.message_id || 'unknown'}）`;
 }
 
-function connectText({ name = 'Qoder Agent', id = 'qoder' } = {}) {
-  const accounts = accountSummary();
-  if (accounts?.length) {
-    return [
-      '🟡 本机已有飞书机器人配置：',
-      ...accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
-      '',
-      '控制面插件已加载。长连接 connector 进程尚未由本插件托管。',
-      '当前可以先用 feishu_send 主动发消息；实时收发需要下一步的 connector runtime。',
-    ].join('\n');
+let connectorModule;
+async function connector() {
+  connectorModule ||= await import('../connector/index.mjs');
+  return connectorModule;
+}
+
+async function connectText({ name = 'Qoder Agent', id = 'qoder' } = {}) {
+  const config = loadConfig();
+  const target = (config?.accounts || []).find((account) => account.id === id);
+  if (target) {
+    try {
+      const { startConnector } = await connector();
+      const status = await startConnector({ accountIds: [id] });
+      return [
+        `🟢 已启动飞书连接器：${id}`,
+        ...status.accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
+        '',
+        '现在到飞书群里 @ 这个机器人即可。回复会由 Qoder 生成并回到飞书。',
+      ].join('\n');
+    } catch (error) {
+      return `🔴 启动连接器失败：${error?.message || error}`;
+    }
   }
   return [
-    '🔴 还没有飞书机器人配置。请在终端运行：',
+    '🔴 还没有 id 为 `' + id + '` 的飞书机器人配置。请在终端运行：',
     '',
     `  im-agent-team-onboard --name "${name}" --id ${id}`,
     '',
     '它会：1) 打印官方扫码链接；2) 创建应用并保存凭据；3) 自动创建测试群。',
-    '扫码完成后告诉我，我再调用 feishu_status 检查。',
-    '',
-    '当前 MCP 服务不会自己弹出二维码；二维码由 onboarding CLI 负责。',
+    '扫码完成后告诉我，我再调用 feishu_connect 启动连接器。',
   ].join('\n');
 }
 
 async function callTool(name, args) {
   switch (name) {
     case 'feishu_status':
-      return statusText();
+      return await statusText();
     case 'feishu_connect':
-      return connectText(args);
+      return await connectText(args);
     case 'feishu_send':
       return sendText(args);
-    case 'feishu_disconnect':
-      return '当前没有由 MCP 托管的 connector 进程。若已单独启动 connector，请结束对应进程；配置不会删除。';
+    case 'feishu_disconnect': {
+      try {
+        const { stopConnector } = await connector();
+        const status = await stopConnector();
+        return `连接器已停止（running=${status.running}）。配置未删除。`;
+      } catch (error) {
+        return `停止连接器失败：${error?.message || error}`;
+      }
+    }
     default:
       throw new Error(`unknown tool: ${name}`);
   }
