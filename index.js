@@ -423,11 +423,22 @@ export function apply(ctx, rawConfig) {
         if (frame?.type === 'chunk' && frame.chunk?.type === 'text-delta') text += frame.chunk.text;
       });
       handle.agent.ctx.on('agent/request-error', (payload, next) => {
-        events.push({ type: 'request-error', failure: payload?.failure });
+        events.push({
+          type: 'request-error',
+          failure: payload?.failure,
+          cause: payload?.failure?.cause?.message || String(payload?.failure?.cause || ''),
+        });
         return next();
       });
       handle.agent.ctx.on('agent/error', (payload) => {
-        events.push({ type: 'error', message: payload?.error?.message || String(payload?.error) });
+        const error = payload?.error;
+        events.push({
+          type: 'error',
+          message: error?.message || String(error),
+          code: error?.code,
+          cause: error?.cause?.message || String(error?.cause || ''),
+          stack: error?.stack?.slice(0, 1200),
+        });
       });
       await handle.agent.followup({
         content: [{ type: 'text', text: String(args.text || '只回复 OK。') }],
