@@ -3,15 +3,15 @@
  * Configure one bot's role in the local Feishu team config.
  *
  * Usage:
- *   dsh-feishu-team-role --id assistant --name 调研员 \
+ *   im-agent-team-role --id assistant --name 调研员 \
  *     --mission "搜集并核验公开数据" \
  *     --responsibilities "按维度收集;标注来源;交给撰稿人" \
  *     --handoff-to 撰稿人 --constraints "不编造;不写文件" \
  *     --behavior "先评估任务合理性;缺材料要提出"
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { resolveStateDir } from '../lib/bridge-core/state-dir.js';
 
 const args = process.argv.slice(2);
 function has(name) {
@@ -30,8 +30,7 @@ function listArg(name) {
     .filter(Boolean);
 }
 
-const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
-const configFile = join(dshHome, 'dsh-feishu-team', 'config.json');
+const configFile = join(resolveStateDir(), 'config.json');
 if (!existsSync(configFile)) {
   console.error(`config not found: ${configFile}`);
   process.exit(1);

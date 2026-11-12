@@ -9,7 +9,7 @@
 
 已落地：
 
-- Cordis Host 插件 `dsh-feishu-team`，可在 profile 中安装、启用、热重载。
+- Cordis Host 插件 `im-agent-team`，可在 profile 中安装、启用、热重载。
 - 飞书长连接（官方 `@larksuiteoapi/node-sdk`）：事件接收、文本/富文本发送、@ 识别。
 - 绑定模型：`appId + chatId → DSH Agent`；会话可恢复，损坏会话自动轮换。
 - 团队层：名册、角色卡、`/role`、`/team`、`/whoami`、`/status`、`/stop`、`/new`。
@@ -24,7 +24,7 @@
 ## 2. 运行时选择
 
 ```jsonc
-// ~/.dsh/dsh-feishu-team/config.json
+// ~/.dsh/im-agent-team/config.json
 {
   "accounts": [
     {
@@ -80,7 +80,7 @@ outboundCount = 2   // 任务 + 转述
 ## 5. 角色与记忆
 
 - 角色字段：`name` / `mission` / `responsibilities` / `inputs` / `outputs` / `handoffTo` / `constraints` / `behavior`。
-- 角色可来自 `config.json`、`dsh-feishu-team-role` CLI、群内 `/role` 命令。
+- 角色可来自 `config.json`、`im-agent-team-role` CLI、群内 `/role` 命令。
 - `behavior` 不设置时使用默认四条工作方式：任务合理性评估与反驳、主动补齐前置、主动推进、像真实同事一样工作。
 - 这些约束会进入 `dsh-native` 的系统提示分段，也会进入 `subagent` 每条消息的 prompt。
 - 团队记忆按 `appId + chatId` 存在 `state.json` 的 `memory` 字段；自动记录任务/产出/角色决策，`/remember` / `/memory` / `/forget` 手动管理。
@@ -106,7 +106,7 @@ node --check lib/runtimes/dsh/native.js
 node --check lib/runtimes/dsh/subagent.js
 
 # 本地安装（当前 profile）
-dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
+dsh plugin --profile desktop add C:/path/to/im-agent-team
 ```
 
 调试工具（Host 工具，仅开发期）：

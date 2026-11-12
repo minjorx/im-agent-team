@@ -75,27 +75,19 @@ lib/
 
 ## 命名与迁移
 
-`agent-team` 作为**项目/仓库的 umbrella 名**是可行的，但直接作为 npm 包名不可行：
+最终采用 **`im-agent-team`**：
 
-- npm 上 `agent-team` 已被占用（`agent-team` v0.2.0，Multi-agent CLI orchestrator via ACP）；
-- GitHub 上 `agent-team` 相关仓库有 6000+，可发现性差；
-- 更要注意 `NanmiCoder/dsh-agent-teams` 已经是一个知名的 DSH 多 Agent 插件（2.8k+ stars），用 `dsh-agent-team(s)` 容易混淆。
+- 仓库：`https://github.com/minjorx/im-agent-team`
+- npm 包：`im-agent-team`（当前不发布，先走 GitHub / tarball）
+- DSH bundle row：`id: im-agent-team`、`name: im-agent-team`
+- 内部核心：`bridge-core`（`lib/bridge-core`，未来拆包时 `packages/bridge-core`）
 
-推荐：
+命名理由：`im` 点明团队是在 IM 群里形成的，`agent` 点明成员是 Agent，`team` 点明有角色分工与协作；不绑定飞书或 DSH 单一运行时。
 
-- **仓库 / 项目名**：`agent-team` 或 `agent-team-bridge`（后者更具体，npm 上也未被占用）；
-- **npm 包名**：`agent-team-bridge`，或 `@你的scope/agent-team`；
-- **内部核心目录/包名**：`bridge-core`（即 `lib/bridge-core`，未来拆包时 `packages/bridge-core`）。
+没有采用的名字：
 
-现状：
+- `agent-team`：npm 已被占用（v0.2.0），GitHub 同名仓库很多；
+- `agent-team-bridge`：可用，但不如 `im-agent-team` 直观；
+- `dsh-agent-team(s)`：与已有的 DSH 多 Agent 项目容易混淆。
 
-- npm 包名与 profile 安装名仍是 `dsh-feishu-team`（v0.1），避免破坏已安装实例与本地状态目录；
-- 目录已按 `bridge-core` / `channels` / `runtimes` 分层，后续加渠道或运行时不需要动核心。
-
-v0.2 迁移步骤（等最终名字确定后执行）：
-
-1. `package.json` 改名（`agent-team-bridge` 或 scoped 名），版本 `0.2.0`；
-2. `cordis.patch.yml` 的 row `name` 改为新包名，id 改为 `agent-team`；
-3. 状态目录从 `~/.dsh/dsh-feishu-team` 迁移到 `~/.dsh/agent-team`（首次启动可自动复制旧配置/凭据）；
-4. 卸载旧 bundle、安装新 bundle；
-5. 更新 README、市场索引条目、GitHub 仓库名。
+状态迁移：v0.2 首次加载时，把 `~/.dsh/dsh-feishu-team`（或中间版本 `~/.dsh/agent-team`）复制到 `~/.dsh/im-agent-team`，旧目录保留作为备份；随后卸载旧 bundle、安装新 bundle。

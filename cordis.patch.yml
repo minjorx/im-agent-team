@@ -1,6 +1,6 @@
 - insert:
-    - id: feishu-team
-      name: dsh-feishu-team
+    - id: im-agent-team
+      name: im-agent-team
       config:
         debug: false
         accounts: []

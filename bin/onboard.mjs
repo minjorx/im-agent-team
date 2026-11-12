@@ -3,16 +3,15 @@
  * Official Feishu one-click app onboarding (OAuth 2.0 Device Authorization Grant).
  *
  * Usage:
- *   dsh-feishu-team-onboard --name "DSH Assistant" --id assistant
+ *   im-agent-team-onboard --name "DSH Assistant" --id assistant
  *
- * Writes the QR image and the creation result under $DSH_HOME/dsh-feishu-team,
+ * Writes the QR image and the creation result under $DSH_HOME/im-agent-team,
  * stores credentials there, creates a test group with the scanning user, and
  * appends the new account to config.json.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import QRCode from 'qrcode';
+import { resolveStateDir } from '../lib/bridge-core/state-dir.js';
 
 const args = process.argv.slice(2);
 function arg(name, fallback) {
@@ -36,8 +35,7 @@ const roleResponsibilities = listArg('role-responsibilities');
 const roleConstraints = listArg('role-constraints');
 const handoffTo = listArg('handoff-to');
 const createGroup = args.includes('--no-group') ? false : true;
-const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
-const stateDir = join(dshHome, 'dsh-feishu-team');
+const stateDir = resolveStateDir();
 const appsFile = join(stateDir, 'feishu-apps.json');
 const configFile = join(stateDir, 'config.json');
 const qrFile = join(stateDir, 'onboard-qr.png');

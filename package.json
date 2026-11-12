@@ -1,9 +1,17 @@
 {
-  "name": "dsh-feishu-team",
-  "version": "0.1.0",
-  "description": "Feishu multi-bot team bridge for DeepSeek Harness: connect agents, sessions and terminals as bots in one Feishu group.",
+  "name": "im-agent-team",
+  "version": "0.2.0",
+  "description": "IM-based multi-agent team bridge for DeepSeek Harness: turn members of a Feishu group into collaborating agents.",
   "license": "MIT",
-  "author": "dsh-feishu-team contributors",
+  "author": "minjorx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/minjorx/im-agent-team.git"
+  },
+  "homepage": "https://github.com/minjorx/im-agent-team",
+  "bugs": {
+    "url": "https://github.com/minjorx/im-agent-team/issues"
+  },
   "type": "module",
   "keywords": [
     "dsh",
@@ -13,7 +21,9 @@
     "lark",
     "bot",
     "multi-agent",
-    "im"
+    "agent-team",
+    "im",
+    "team"
   ],
   "engines": {
     "dsh": ">=0.2.1-rc.3 <0.3.0"
@@ -24,8 +34,8 @@
     "./icon": "./icon.svg"
   },
   "bin": {
-    "dsh-feishu-team-onboard": "./bin/onboard.mjs",
-    "dsh-feishu-team-role": "./bin/role.mjs"
+    "im-agent-team-onboard": "./bin/onboard.mjs",
+    "im-agent-team-role": "./bin/role.mjs"
   },
   "dsh": {
     "bundle": {

@@ -7,9 +7,11 @@ import { FeishuChannel } from './lib/channels/feishu/channel.js';
 import { DshRuntime } from './lib/runtimes/dsh/native.js';
 import { SubagentRuntime } from './lib/runtimes/dsh/subagent.js';
 import { normalizeConfig } from './lib/bridge-core/config.js';
+import { resolveStateDir } from './lib/bridge-core/state-dir.js';
 import { buildSyntheticMessage } from './lib/channels/feishu/normalize.js';
 
-const LOG_PREFIX = '[feishu-team]';
+const LOG_PREFIX = '[im-agent-team]';
+const STATE_DIR = resolveStateDir();
 
 function makeLogger() {
   return {
@@ -173,9 +175,12 @@ function installFetchProbeV4() {
 
 function loadConfig(raw = {}) {
   let merged = raw || {};
-  const inline = process.env.FEISHU_TEAM_CONFIG_JSON;
-  const dshHome = process.env.DSH_HOME || join(process.env.USERPROFILE || '', '.dsh');
-  const file = process.env.FEISHU_TEAM_CONFIG || join(dshHome, 'dsh-feishu-team', 'config.json');
+  const inline = process.env.IM_AGENT_TEAM_CONFIG_JSON || process.env.FEISHU_TEAM_CONFIG_JSON;
+  const file =
+    process.env.IM_AGENT_TEAM_CONFIG ||
+    process.env.AGENT_TEAM_CONFIG ||
+    process.env.FEISHU_TEAM_CONFIG ||
+    join(STATE_DIR, 'config.json');
   try {
     if (inline) merged = { ...merged, ...JSON.parse(inline) };
     else if (existsSync(file)) merged = { ...merged, ...JSON.parse(readFileSync(file, 'utf8')) };
@@ -185,7 +190,7 @@ function loadConfig(raw = {}) {
 
   // Merge credentials from the local app store, keyed by account id or appId.
   try {
-    const appsFile = join(dshHome, 'dsh-feishu-team', 'feishu-apps.json');
+    const appsFile = join(STATE_DIR, 'feishu-apps.json');
     if (existsSync(appsFile)) {
       const apps = JSON.parse(readFileSync(appsFile, 'utf8')).apps || [];
       for (const account of merged.accounts || []) {
@@ -203,7 +208,7 @@ function loadConfig(raw = {}) {
   return merged;
 }
 
-export const name = 'feishu-team';
+export const name = 'im-agent-team';
 export const inject = ['agents', 'tools', 'systemPrompt', 'subagents'];
 
 export function apply(ctx, rawConfig) {
@@ -462,7 +467,7 @@ export function apply(ctx, rawConfig) {
     return { ok: false, data: { error: `unknown action ${action}` } };
   }
 
-  ctx.effect(() => ctx.tools.register(debugTool), 'feishu-team.debugTool()');
+  ctx.effect(() => ctx.tools.register(debugTool), 'im-agent-team.debugTool()');
 
   ctx.effect(() => {
     let disposed = false;
@@ -539,7 +544,7 @@ export function apply(ctx, rawConfig) {
       stopping = true;
       return Promise.allSettled(controllers.map((controller) => controller.stop())).then(() => store.flush());
     };
-  }, 'feishu-team.start()');
+  }, 'im-agent-team.start()');
 
   return {
     controllers,

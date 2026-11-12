@@ -1,4 +1,4 @@
-# dsh-feishu-team
+# im-agent-team
 
 把不同终端 / 智能体 / 会话中的 AI Agent，以独立机器人身份接入同一个飞书群，让它们在群里分工、交接、协作。
 
@@ -15,7 +15,7 @@
 - 真实协作链路：总调度 → 调研员（真实模型）→ 总调度 → 用户；`result` 回执不触发下一跳。
 - 21 个本地测试通过。
 - 运行时：`dsh-native`（常驻 Agent，受当前 DSH 根 Agent 收流问题影响）与 `subagent`（每条消息一个子 Agent，已验证可用）。
-- 扫码创建机器人：`dsh-feishu-team-onboard`（飞书官方 `registerApp` 设备授权流程）。
+- 扫码创建机器人：`im-agent-team-onboard`（飞书官方 `registerApp` 设备授权流程）。
 
 ## 架构与目录（core + adapters）
 
@@ -37,23 +37,23 @@ lib/
 | Qoder / Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
 
 - 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
-- 命名：项目 umbrella 可以用 `agent-team`，但 npm 的 `agent-team` 已被占用，建议仓库/包名用 **`agent-team-bridge`**（或 scoped `@你的scope/agent-team`）；内部核心目录已定为 `bridge-core`。当前 v0.1 包名仍是 `dsh-feishu-team`，避免破坏已安装实例；v0.2 再做迁移，步骤见 [docs/adapters.md](docs/adapters.md)。
+- 命名：包名定为 **`im-agent-team`**（IM + Agent + Team），内部核心目录为 `bridge-core`。npm 上 `agent-team` 已被占用，`im-agent-team` 当前可用；npm 注册暂不作为发布前提。
 
 ## 安装方式
 
 ### 1. 从 npm 安装（推荐，需已发布）
 
 ```bash
-dsh plugin --profile desktop add dsh-feishu-team
+dsh plugin --profile desktop add im-agent-team
 ```
 
 ### 2. 从 GitHub 安装
 
 ```bash
-dsh plugin --profile desktop add github:OWNER/dsh-feishu-team
+dsh plugin --profile desktop add github:minjorx/im-agent-team
 ```
 
-要求：能访问 GitHub；`OWNER` 换成实际仓库所有者。pnpm 也接受 `git+https://...#<commit>` 形式。
+要求：能访问 GitHub。pnpm 也接受 `git+https://...#<commit>` 形式。
 
 ### 3. 离线 tarball（适合只能访问 npm、不能访问 GitHub 的环境）
 
@@ -61,13 +61,13 @@ dsh plugin --profile desktop add github:OWNER/dsh-feishu-team
 
 ```bash
 pnpm pack
-# 产出 dsh-feishu-team-0.1.0.tgz
+# 产出 im-agent-team-0.2.0.tgz
 ```
 
 把 tgz 传到目标机器后：
 
 ```bash
-dsh plugin --profile desktop add ./dsh-feishu-team-0.1.0.tgz
+dsh plugin --profile desktop add ./im-agent-team-0.2.0.tgz
 ```
 
 注意：pnpm 仍会从 npm registry 解析 `@larksuiteoapi/node-sdk` 和 `qrcode` 两个依赖。目标机器只要能访问 npm（或 npmmirror 等镜像）即可；如果连 npm 也不通，见下方“完全离线”。
@@ -75,9 +75,9 @@ dsh plugin --profile desktop add ./dsh-feishu-team-0.1.0.tgz
 ### 4. 本地目录（开发/内网共享）
 
 ```bash
-dsh plugin --profile desktop add C:\path\to\dsh-feishu-team
+dsh plugin --profile desktop add C:\path\to\im-agent-team
 # 或 Linux/macOS
-dsh plugin --profile desktop add /opt/dsh-feishu-team
+dsh plugin --profile desktop add /opt/im-agent-team
 ```
 
 ### 完全离线
@@ -96,7 +96,7 @@ dsh plugin --profile desktop add /opt/dsh-feishu-team
 
 ```bash
 # 已发布到 npm 时
-npx dsh-feishu-team-onboard --name "DSH Assistant" --id assistant
+npx im-agent-team-onboard --name "DSH Assistant" --id assistant
 
 # 本地开发时
 node bin/onboard.mjs --name "DSH Assistant" --id assistant
@@ -104,12 +104,12 @@ node bin/onboard.mjs --name "DSH Assistant" --id assistant
 
 流程：
 
-1. 终端打印二维码，同时把二维码写到 `$DSH_HOME/dsh-feishu-team/onboard-qr.png`；
+1. 终端打印二维码，同时把二维码写到 `$DSH_HOME/im-agent-team/onboard-qr.png`；
 2. 手机飞书扫码，在确认页同意创建；
 3. 官方 `registerApp` 返回 App ID / App Secret；
-4. 凭据写入 `$DSH_HOME/dsh-feishu-team/feishu-apps.json`；
+4. 凭据写入 `$DSH_HOME/im-agent-team/feishu-apps.json`；
 5. 自动创建「<应用名> 测试群」并把扫码人拉进去；
-6. 新账号追加到 `$DSH_HOME/dsh-feishu-team/config.json`；
+6. 新账号追加到 `$DSH_HOME/im-agent-team/config.json`；
 7. 重载插件（或重启 DSH）后，新机器人即可在群里被 @。
 
 可选参数：`--no-group` 只创建应用、不建群。
@@ -118,7 +118,7 @@ node bin/onboard.mjs --name "DSH Assistant" --id assistant
 
 当前 DSH 构建**没有内置的官方插件市场索引**（`plugin_market` 的 `indexes` 为空），也不存在“上传到官方市场”的公开接口。可用路径：
 
-1. **npm 直装**：发布到 npm 后，用户直接 `dsh plugin add dsh-feishu-team`；
+1. **npm 直装**：发布到 npm 后，用户直接 `dsh plugin add im-agent-team`；
 2. **自建市场索引**：DSH 支持用户配置一个 format 1 的插件市场 JSON 索引 URL（Settings → Plugins → Discover 可添加），把本包写进索引即可被搜索/安装；索引可放在任意 HTTPS 静态托管上；
 3. **GitHub Release**：发布 tgz 附件，用户下载后按“离线 tarball”安装。
 
@@ -126,10 +126,10 @@ node bin/onboard.mjs --name "DSH Assistant" --id assistant
 
 ## 配置
 
-- 运行配置：`~/.dsh/dsh-feishu-team/config.json`
-- 应用凭据：`~/.dsh/dsh-feishu-team/feishu-apps.json`（不会进仓库）
-- 扫码结果：`~/.dsh/dsh-feishu-team/onboard-result.json`
-- 二维码：`~/.dsh/dsh-feishu-team/onboard-qr.png`
+- 运行配置：`~/.dsh/im-agent-team/config.json`
+- 应用凭据：`~/.dsh/im-agent-team/feishu-apps.json`（不会进仓库）
+- 扫码结果：`~/.dsh/im-agent-team/onboard-result.json`
+- 二维码：`~/.dsh/im-agent-team/onboard-qr.png`
 
 群绑定是动态的：机器人被拉进新群后，收到第一条 @ 消息会自动创建 binding，不需要改配置；`config.json` 里的 `chatIds` 只是初始绑定。
 
@@ -140,7 +140,7 @@ node bin/onboard.mjs --name "DSH Assistant" --id assistant
 1. **终端 CLI**（不需要打开飞书）：
 
 ```bash
-dsh-feishu-team-role \
+im-agent-team-role \
   --id director \
   --name 总调度 \
   --mission "接需求、拆任务、最终交付" \
@@ -153,7 +153,7 @@ dsh-feishu-team-role \
 
 2. **群内命令**：`@机器人 /role <职责描述>` 更新使命，并广播角色卡给其他机器人。
 
-3. **配置文件**：`~/.dsh/dsh-feishu-team/config.json` 的 `accounts[].role`。
+3. **配置文件**：`~/.dsh/im-agent-team/config.json` 的 `accounts[].role`。
 
 ### 默认工作方式（可用 `--behavior` 覆盖或追加）
 
@@ -185,7 +185,7 @@ pnpm pack
 
 1. 把 `package.json` 的 `repository` / `homepage` / `bugs` 补成实际仓库地址；
 2. 确认 `engines.dsh` 与目标 DSH 版本一致（当前 `>=0.2.1-rc.3 <0.3.0`）；
-3. `npm publish --access public`（包名 `dsh-feishu-team` 未被占用时）；
+3. `npm publish --access public`（包名 `im-agent-team` 未被占用时）；
 4. `git tag v0.1.0 && git push --tags`；
 5. 在 GitHub Release 附上 `pnpm pack` 生成的 tgz；
 6. 如需市场索引，发布一个 format 1 的 `index.json` 并让用户添加 URL。
