@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JsonStore } from '../lib/store.js';
-import { MockChannel } from '../lib/channel/mock.js';
-import { TeamController } from '../lib/team.js';
-import { DEFAULTS } from '../lib/config.js';
+import { JsonStore } from '../lib/core/store.js';
+import { MockChannel } from '../lib/channels/mock/channel.js';
+import { TeamController } from '../lib/core/team.js';
+import { DEFAULTS } from '../lib/core/config.js';
 
 const silent = { info() {}, warn() {}, error() {} };
 

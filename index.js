@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { JsonStore } from './lib/store.js';
-import { MockChannel } from './lib/channel/mock.js';
-import { TeamController } from './lib/team.js';
-import { FeishuChannel } from './lib/feishu/channel.js';
-import { DshRuntime } from './lib/runtime/dsh.js';
-import { SubagentRuntime } from './lib/runtime/subagent.js';
-import { normalizeConfig } from './lib/config.js';
-import { buildSyntheticMessage } from './lib/feishu/normalize.js';
+import { JsonStore } from './lib/core/store.js';
+import { MockChannel } from './lib/channels/mock/channel.js';
+import { TeamController } from './lib/core/team.js';
+import { FeishuChannel } from './lib/channels/feishu/channel.js';
+import { DshRuntime } from './lib/runtimes/dsh/native.js';
+import { SubagentRuntime } from './lib/runtimes/dsh/subagent.js';
+import { normalizeConfig } from './lib/core/config.js';
+import { buildSyntheticMessage } from './lib/channels/feishu/normalize.js';
 
 const LOG_PREFIX = '[feishu-team]';
 

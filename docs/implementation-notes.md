@@ -98,12 +98,12 @@ outboundCount = 2   // 任务 + 转述
 
 ```bash
 # 单元 + 控制器测试
-node --test test/unit.test.js test/controller.test.js
+node --test test/unit.test.js test/controller.test.js test/memory.test.js
 
 # 语法检查
 node --check index.js
-node --check lib/runtime/dsh.js
-node --check lib/runtime/subagent.js
+node --check lib/runtimes/dsh/native.js
+node --check lib/runtimes/dsh/subagent.js
 
 # 本地安装（当前 profile）
 dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
@@ -124,15 +124,18 @@ dsh plugin --profile desktop add C:/path/to/dsh-feishu-team
 | 文件 | 作用 |
 |---|---|
 | `index.js` | 插件入口、配置加载、binding 启动、调试工具 |
-| `lib/config.js` | 配置归一化与校验 |
-| `lib/team.js` | 绑定控制器、命令、交接、防环、p2p 邀请 |
-| `lib/memory.js` | 按 binding 持久化的团队记忆 |
-| `lib/roster.js` | 名册与同作用域 open_id 合并 |
-| `lib/guard.js` | hop / 冷却 / 指纹 / 预算 |
-| `lib/protocol.js` | 信封、富文本、分片、解析 |
-| `lib/feishu/channel.js` | 长连接与事件归一化 |
-| `lib/feishu/api.js` | tenant token、发消息、建群/拉人 |
-| `lib/runtime/dsh.js` | 常驻 Agent 运行时 |
-| `lib/runtime/subagent.js` | 子 Agent 兜底运行时 |
+| `lib/core/config.js` | 配置归一化与校验 |
+| `lib/core/contracts.js` | ChannelAdapter / AgentRuntime 契约 |
+| `lib/core/team.js` | 绑定控制器、命令、交接、防环、p2p 邀请 |
+| `lib/core/memory.js` | 按 binding 持久化的团队记忆 |
+| `lib/core/roster.js` | 名册与同作用域 open_id 合并 |
+| `lib/core/guard.js` | hop / 冷却 / 指纹 / 预算 |
+| `lib/core/protocol.js` | 信封、富文本、分片、解析 |
+| `lib/core/prompt.js` | 身份、名册、协议、工作方式、记忆提示词 |
+| `lib/channels/feishu/channel.js` | 长连接与事件归一化 |
+| `lib/channels/feishu/api.js` | tenant token、发消息、建群/拉人 |
+| `lib/runtimes/dsh/native.js` | 常驻 Agent 运行时 |
+| `lib/runtimes/dsh/subagent.js` | 子 Agent 兜底运行时 |
 | `bin/onboard.mjs` | 扫码创建应用 CLI |
 | `bin/role.mjs` | 角色配置 CLI |
+| `docs/adapters.md` | 分层、契约与新增渠道/运行时的步骤 |

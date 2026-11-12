@@ -17,6 +17,28 @@
 - 运行时：`dsh-native`（常驻 Agent，受当前 DSH 根 Agent 收流问题影响）与 `subagent`（每条消息一个子 Agent，已验证可用）。
 - 扫码创建机器人：`dsh-feishu-team-onboard`（飞书官方 `registerApp` 设备授权流程）。
 
+## 架构与目录（core + adapters）
+
+代码已按“与平台/Agent 无关的 core + 可替换适配层”分层：
+
+```
+lib/
+├── core/                  # 协议、名册、角色、记忆、防环、控制器
+├── channels/feishu/       # 飞书渠道适配层
+├── channels/mock/         # 测试渠道
+└── runtimes/dsh/          # DSH 运行时适配层（native + subagent）
+```
+
+目标矩阵：
+
+| 运行时 \ 渠道 | 飞书 | 其他渠道 |
+|---|---|---|
+| DSH | ✅ 首版 | 新增 channel 即可 |
+| Qoder / Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
+
+- 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
+- 命名建议：仓库/包名用 **`dsh-agent-bridge`**（不绑定飞书，也不绑定 DSH 单一运行时）。当前 v0.1 包名仍是 `dsh-feishu-team`，避免破坏已安装实例；v0.2 再做包名与状态目录迁移，步骤写在 adapters 文档里。
+
 ## 安装方式
 
 ### 1. 从 npm 安装（推荐，需已发布）
