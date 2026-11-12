@@ -1,0 +1,130 @@
+# dsh-feishu-team
+
+把不同终端 / 智能体 / 会话中的 AI Agent，以独立机器人身份接入同一个飞书群，让它们在群里分工、交接、协作。
+
+- AI 工具端：DSH（首版）
+- 消息端：飞书（首版）
+- 设计文档：[飞书多机器人协作适配层](docs/feishu-multi-agent-bridge-design.md)
+- 实现记录：[实现说明与联调记录](docs/implementation-notes.md)
+
+## 当前状态
+
+首版已实现，并在真实飞书租户完成多 Bot 联调：
+
+- 飞书长连接收发、绑定/动态群绑定、名册、角色卡、命令、交接协议、防环。
+- 真实协作链路：总调度 → 调研员（真实模型）→ 总调度 → 用户；`result` 回执不触发下一跳。
+- 21 个本地测试通过。
+- 运行时：`dsh-native`（常驻 Agent，受当前 DSH 根 Agent 收流问题影响）与 `subagent`（每条消息一个子 Agent，已验证可用）。
+- 扫码创建机器人：`dsh-feishu-team-onboard`（飞书官方 `registerApp` 设备授权流程）。
+
+## 安装方式
+
+### 1. 从 npm 安装（推荐，需已发布）
+
+```bash
+dsh plugin --profile desktop add dsh-feishu-team
+```
+
+### 2. 从 GitHub 安装
+
+```bash
+dsh plugin --profile desktop add github:OWNER/dsh-feishu-team
+```
+
+要求：能访问 GitHub；`OWNER` 换成实际仓库所有者。pnpm 也接受 `git+https://...#<commit>` 形式。
+
+### 3. 离线 tarball（适合只能访问 npm、不能访问 GitHub 的环境）
+
+在一台有网络的机器上：
+
+```bash
+pnpm pack
+# 产出 dsh-feishu-team-0.1.0.tgz
+```
+
+把 tgz 传到目标机器后：
+
+```bash
+dsh plugin --profile desktop add ./dsh-feishu-team-0.1.0.tgz
+```
+
+注意：pnpm 仍会从 npm registry 解析 `@larksuiteoapi/node-sdk` 和 `qrcode` 两个依赖。目标机器只要能访问 npm（或 npmmirror 等镜像）即可；如果连 npm 也不通，见下方“完全离线”。
+
+### 4. 本地目录（开发/内网共享）
+
+```bash
+dsh plugin --profile desktop add C:\path\to\dsh-feishu-team
+# 或 Linux/macOS
+dsh plugin --profile desktop add /opt/dsh-feishu-team
+```
+
+### 完全离线
+
+`dsh plugin add` 通过 pnpm 安装依赖，因此“完全断网”需要满足其一：
+
+1. 内网 npm 镜像（Verdaccio、Nexus、npmmirror 私有代理），把 registry 配到 pnpm；
+2. 预填充目标 profile 的 pnpm store，并让 pnpm 使用 `--offline`（插件管理器不直接暴露该参数，需要预置 profile 依赖后启动）；
+3. 把依赖一起打成一个内网分发包，由内网源安装。
+
+不建议手工把包复制进 profile 的 `node_modules` 后改 `package.json`，这会绕过插件管理器的兼容性校验与锁文件。
+
+## 扫码创建机器人
+
+安装后运行 onboarding CLI（首次使用需要先允许扫码授权）：
+
+```bash
+# 已发布到 npm 时
+npx dsh-feishu-team-onboard --name "DSH Assistant" --id assistant
+
+# 本地开发时
+node bin/onboard.mjs --name "DSH Assistant" --id assistant
+```
+
+流程：
+
+1. 终端打印二维码，同时把二维码写到 `$DSH_HOME/dsh-feishu-team/onboard-qr.png`；
+2. 手机飞书扫码，在确认页同意创建；
+3. 官方 `registerApp` 返回 App ID / App Secret；
+4. 凭据写入 `$DSH_HOME/dsh-feishu-team/feishu-apps.json`；
+5. 自动创建「<应用名> 测试群」并把扫码人拉进去；
+6. 新账号追加到 `$DSH_HOME/dsh-feishu-team/config.json`；
+7. 重载插件（或重启 DSH）后，新机器人即可在群里被 @。
+
+可选参数：`--no-group` 只创建应用、不建群。
+
+## 插件市场
+
+当前 DSH 构建**没有内置的官方插件市场索引**（`plugin_market` 的 `indexes` 为空），也不存在“上传到官方市场”的公开接口。可用路径：
+
+1. **npm 直装**：发布到 npm 后，用户直接 `dsh plugin add dsh-feishu-team`；
+2. **自建市场索引**：DSH 支持用户配置一个 format 1 的插件市场 JSON 索引 URL（Settings → Plugins → Discover 可添加），把本包写进索引即可被搜索/安装；索引可放在任意 HTTPS 静态托管上；
+3. **GitHub Release**：发布 tgz 附件，用户下载后按“离线 tarball”安装。
+
+如果 DeepSeek 后续开放官方市场提交入口，再按官方格式提交；本仓库不假设存在该入口。
+
+## 配置
+
+- 运行配置：`~/.dsh/dsh-feishu-team/config.json`
+- 应用凭据：`~/.dsh/dsh-feishu-team/feishu-apps.json`（不会进仓库）
+- 扫码结果：`~/.dsh/dsh-feishu-team/onboard-result.json`
+- 二维码：`~/.dsh/dsh-feishu-team/onboard-qr.png`
+
+群绑定是动态的：机器人被拉进新群后，收到第一条 @ 消息会自动创建 binding，不需要改配置；`config.json` 里的 `chatIds` 只是初始绑定。
+
+## 开发
+
+```bash
+pnpm install
+node --test test/unit.test.js test/controller.test.js
+node --check index.js
+pnpm pack
+```
+
+## 发布清单
+
+1. 把 `package.json` 的 `repository` / `homepage` / `bugs` 补成实际仓库地址；
+2. 确认 `engines.dsh` 与目标 DSH 版本一致（当前 `>=0.2.1-rc.3 <0.3.0`）；
+3. `npm publish --access public`（包名 `dsh-feishu-team` 未被占用时）；
+4. `git tag v0.1.0 && git push --tags`；
+5. 在 GitHub Release 附上 `pnpm pack` 生成的 tgz；
+6. 如需市场索引，发布一个 format 1 的 `index.json` 并让用户添加 URL。

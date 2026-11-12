@@ -1,0 +1,53 @@
+{
+  "name": "dsh-feishu-team",
+  "version": "0.1.0",
+  "description": "Feishu multi-bot team bridge for DeepSeek Harness: connect agents, sessions and terminals as bots in one Feishu group.",
+  "license": "MIT",
+  "author": "dsh-feishu-team contributors",
+  "type": "module",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "feishu",
+    "lark",
+    "bot",
+    "multi-agent",
+    "im"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.3 <0.3.0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "bin": {
+    "dsh-feishu-team-onboard": "./bin/onboard.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.76.0",
+    "qrcode": "^1.5.4"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "lib",
+    "bin",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/unit.test.js test/controller.test.js",
+    "pack": "pnpm pack",
+    "onboard": "node bin/onboard.mjs"
+  }
+}

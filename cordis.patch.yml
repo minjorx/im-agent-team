@@ -1,0 +1,6 @@
+- insert:
+    - id: feishu-team
+      name: dsh-feishu-team
+      config:
+        debug: true
+        accounts: []

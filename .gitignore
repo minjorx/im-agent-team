@@ -1,0 +1,11 @@
+node_modules/
+*.tgz
+*.log
+.DS_Store
+.env
+.env.*
+.browser-profile/
+docs/shots/
+docs/onboard-qr.png
+docs/onboard-result.json
+tools/
