@@ -40,6 +40,10 @@ export class DshRuntime {
     return this.binding.sessionId;
   }
 
+  get fullAccess() {
+    return this.binding.fullAccess !== false;
+  }
+
   async ensure() {
     if (this.agent) return this.agent;
     if (this.creating) return this.creating;
@@ -155,44 +159,63 @@ export class DshRuntime {
     } catch (error) {
       this.logger.warn(`[${this.binding.id}] composition inheritance failed`, error?.message || error);
     }
-    try {
-      // Bot agents get only their scoped team tools. The registry's restriction
-      // filter names global tools, so deny the host toolset explicitly.
-      agentCtx.tools.restrict({
-        deny: [
-          'create_goal',
-          'edit',
-          'exit_plan_mode',
-          'feishu_team_debug',
-          'get_goal',
-          'glob',
-          'grep',
-          'interrupt_agent',
-          'job_kill',
-          'job_list',
-          'job_output',
-          'list_agents',
-          'pwsh',
-          'read',
-          'read_image',
-          'send_message',
-          'skill',
-          'subagent',
-          'subagent_fork',
-          'todo_write',
-          'update_goal',
-          'web_fetch',
-          'web_search',
-          'workflow',
-          'working_directory',
-          'write',
-        ],
-      });
-    } catch (error) {
-      this.logger.warn(`[${this.binding.id}] tool restriction failed`, error?.message || error);
+    if (!this.fullAccess) {
+      try {
+        // Restricted mode: bot agents get only their scoped team tools.
+        agentCtx.tools.restrict({
+          deny: [
+            'ask_user_question',
+            'cordis_inspect_list',
+            'cordis_inspect_query',
+            'create_goal',
+            'create_worktree',
+            'edit',
+            'exit_plan_mode',
+            'feishu_team_debug',
+            'get_goal',
+            'glob',
+            'grep',
+            'interrupt_agent',
+            'job_kill',
+            'job_list',
+            'job_output',
+            'list_agents',
+            'load_workspace_dependencies',
+            'plugin_manager',
+            'present',
+            'pwsh',
+            'read',
+            'read_image',
+            'schedule_create',
+            'schedule_delete',
+            'schedule_list',
+            'schedule_update',
+            'send_message',
+            'skill',
+            'subagent',
+            'subagent_fork',
+            'terminal_close',
+            'terminal_list',
+            'terminal_open',
+            'terminal_read',
+            'terminal_send',
+            'terminal_signal',
+            'todo_write',
+            'update_goal',
+            'web_fetch',
+            'web_search',
+            'workflow',
+            'working_directory',
+            'write',
+          ],
+        });
+      } catch (error) {
+        this.logger.warn(`[${this.binding.id}] tool restriction failed`, error?.message || error);
+      }
     }
     this.installPrompt(agentCtx);
     this.installTools(agentCtx);
+    this.installInteractions(agentCtx, agent);
     agentCtx.on('agent/assistant-stream', (payload) => this.onFrame(payload));
     agentCtx.on('agent/status', (payload) => {
       this.status = payload?.status || this.status;
@@ -337,6 +360,56 @@ export class DshRuntime {
       } catch (error) {
         this.logger.error(`[${this.binding.id}] tool ${tool.name} failed`, error?.message || error);
       }
+    }
+  }
+
+  installInteractions(agentCtx, agent) {
+    try {
+      agentCtx.on('user-questions/request', async (request, next) => {
+        if (request?.agent?.id && request.agent.id !== agent.id) return next();
+        return this.controller.askUserQuestions(request);
+      });
+    } catch (error) {
+      this.logger.warn(`[${this.binding.id}] user-question bridge failed`, error?.message || error);
+    }
+    if (!this.fullAccess) return;
+    try {
+      // 完全权限：工具审批直接放行。
+      agentCtx.on('approval/request', () => 'allowed-once');
+    } catch (error) {
+      this.logger.warn(`[${this.binding.id}] approval bridge failed`, error?.message || error);
+    }
+    this.applyFullPermission(agent);
+  }
+
+  applyFullPermission(agent) {
+    try {
+      const presets = this.ctx.get('permissionPresets');
+      const session = agent?.session || this.handle?.session;
+      if (presets?.catalog && typeof presets.set === 'function' && session) {
+        const catalog = presets.catalog();
+        for (const option of catalog.options || []) {
+          try {
+            const spec = presets.resolve(option.value);
+            if (spec.sandbox === 'danger-full-access') {
+              presets.set(session, option.value);
+              this.fullPreset = option.value;
+              break;
+            }
+          } catch {
+            // ignore preset candidates that no longer resolve
+          }
+        }
+      }
+    } catch (error) {
+      this.logger.warn(`[${this.binding.id}] full-access preset failed`, error?.message || error);
+    }
+    try {
+      // The full preset may select approval=never; ask lets the allow-all
+      // answerer above decide instead of rejecting before dispatch.
+      this.ctx.get('approval')?.setPolicy?.(agent, 'ask');
+    } catch (error) {
+      this.logger.warn(`[${this.binding.id}] approval policy failed`, error?.message || error);
     }
   }
 

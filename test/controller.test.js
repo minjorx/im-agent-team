@@ -191,3 +191,39 @@ test('/remember writes durable memory and /memory shows it', async () => {
   assert.match(text, /Apollo/);
   await rm(dir, { recursive: true, force: true });
 });
+
+test('askUserQuestions sends options and resolves from a group reply', async () => {
+  const { controller, channel, dir } = await makeController();
+  const pending = controller.askUserQuestions(
+    {
+      questions: [
+        {
+          id: 'scope',
+          header: '选择范围',
+          question: '这次做多大范围？',
+          options: [{ label: '全部' }, { label: '核心' }],
+        },
+      ],
+    },
+    { timeoutMs: 5_000 },
+  );
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const questionText = JSON.parse(channel.outbox.at(-1).content).text;
+  assert.match(questionText, /1\. 全部/);
+  assert.match(questionText, /2\. 核心/);
+
+  await controller.handleInbound({
+    messageId: 'om_answer',
+    chatId: 'oc_test',
+    sender: { type: 'user', openId: 'ou_user', name: '张三' },
+    mentionedMe: true,
+    text: '@总调度 2',
+    mentions: [],
+    messageType: 'text',
+  });
+  const answer = await pending;
+  assert.deepEqual(answer.answers, [{ id: 'scope', selected: ['核心'] }]);
+  const ack = JSON.parse(channel.outbox.at(-1).content).text;
+  assert.match(ack, /已收到/);
+  await rm(dir, { recursive: true, force: true });
+});

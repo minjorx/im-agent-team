@@ -86,19 +86,33 @@ outboundCount = 2   // 任务 + 转述
 - 团队记忆按 `appId + chatId` 存在 `state.json` 的 `memory` 字段；自动记录任务/产出/角色决策，`/remember` / `/memory` / `/forget` 手动管理。
 - `subagent` 运行时没有持久 Session，依靠团队记忆 + 最近 6 条对话摘要维持上下文；`dsh-native` 同时有 DSH Session 历史。
 
+### 5.1 DSH 完全权限与提问桥
+
+- `fullAccess` 默认 `true`：
+  - `dsh-native` 不再 restrict 工具，Bot 拥有完整 DSH 工具集；
+  - 注册 `approval/request` answerer，审批直接 `allowed-once`；
+  - 尝试把会话 permission preset 切到 `danger-full-access`；
+- 注册 `user-questions/request` answerer：
+  - `ask_user_question` 转成飞书消息；
+  - 选项用文本序号（`1`、`2`、`1,3`）；
+  - 无选项时直接回复文本作为 `custom`；
+  - 默认 10 分钟超时；
+- 完全权限只对 `dsh-native` 生效；`subagent` 仍无工具、无提问、无审批。
+- 安全边界：完全权限等于把 Host 文件/终端/插件能力交给群里的 Bot，只应在可信群开启。
+
 ## 6. 已知限制
 
 - `dsh-native` 根 Agent 模型收流异常（DSH 侧问题）；当前用 `subagent` 运行时规避。
 - `subagent` 模式没有持久会话，长对话依赖桥接层的历史摘要（最近 6 条）。
 - 群全量消息读取需要敏感权限 `im:message.group_msg`；首版只依赖 @ 消息权限。
-- 卡片交互、任务板、多运行时（ACP/SDK/Claude Code）尚未实现。
+- 飞书提问/选项目前是文本序号，不是 interactive card 按钮；卡片按钮尚未接 `card.action.trigger`。
 - 角色卡广播目前是文本消息，尚未做成可编辑卡片。
 
 ## 7. 开发与测试
 
 ```bash
 # 单元 + 控制器测试
-node --test test/unit.test.js test/controller.test.js test/memory.test.js
+node --test test/unit.test.js test/controller.test.js test/memory.test.js test/native-interactions.test.js
 
 # 语法检查
 node --check index.js
