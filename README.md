@@ -57,9 +57,12 @@ runtimes/                   # 具体 AI 工具的实现，可分别打包成插�
 安装：
 
 ```bash
-qoder plugins install C:\path\to\im-agent-team\runtimes\qoder
-qoder plugins validate C:\path\to\im-agent-team\runtimes\qoder
+npm run pack:qoder
+qoder plugins install C:\path\to\im-agent-team\runtimes\qoder\dist\qoder-plugin
+qoder plugins validate C:\path\to\im-agent-team\runtimes\qoder\dist\qoder-plugin
 ```
+
+不要直接安装 `runtimes/qoder` 源码目录：Qoder 安装器会剔除顶层 `node_modules`；构建后的 `runtime/node_modules` 才是保留的 vendored 依赖。
 
 打包（两个包一起，产物都在根目录 `dist/`）：
 

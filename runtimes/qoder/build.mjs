@@ -2,9 +2,9 @@
 /**
  * Build a self-contained Qoder plugin ZIP.
  *
- * pnpm's node_modules uses absolute symlinks, which do not survive being copied
- * into the plugin cache or a ZIP, so production dependencies are reinstalled
- * with npm into the staging directory.
+ * Qoder's installer ignores a top-level node_modules directory, so the plugin
+ * runtime (MCP server, connector, agent runtime) and its dependencies live
+ * under runtime/, matching the convention used by official Qoder plugins.
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -26,11 +26,7 @@ const entries = [
   'agents',
   'commands',
   'skills',
-  'bin',
-  'connector',
-  'runtime',
   'package.json',
-  '.mcp.json',
   'README.md',
 ];
 
@@ -40,6 +36,11 @@ for (const entry of entries) {
     throw new Error(`missing required plugin entry: ${entry}`);
   }
   cpSync(source, join(stage, entry), { recursive: true });
+}
+
+mkdirSync(join(stage, 'runtime'), { recursive: true });
+for (const entry of ['bin', 'connector', 'runtime']) {
+  cpSync(join(root, entry), join(stage, 'runtime', entry), { recursive: true });
 }
 
 const npm = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
@@ -60,12 +61,38 @@ const npm = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', [
 if (npm.error) throw npm.error;
 if (npm.status !== 0) throw new Error(`npm install failed with exit code ${npm.status}`);
 
-// The published plugin is self-contained: dependencies live in node_modules,
-// so the manifest no longer declares runtime dependencies.
+// Dependencies are vendored inside runtime/ because Qoder strips top-level
+// node_modules during installation.
+cpSync(join(stage, 'node_modules'), join(stage, 'runtime', 'node_modules'), {
+  recursive: true,
+  dereference: true,
+});
+rmSync(join(stage, 'node_modules'), { recursive: true, force: true });
+rmSync(join(stage, 'package-lock.json'), { force: true });
+
+// The published plugin is self-contained: no runtime dependencies are declared.
 const stagedPkg = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8'));
 delete stagedPkg.dependencies;
-writeFileSync(join(stage, 'package.json'), JSON.stringify(stagedPkg, null, 2), 'utf8');
-rmSync(join(stage, 'package-lock.json'), { force: true });
+const manifestJson = JSON.stringify(stagedPkg, null, 2);
+writeFileSync(join(stage, 'package.json'), manifestJson, 'utf8');
+writeFileSync(join(stage, 'runtime', 'package.json'), manifestJson, 'utf8');
+
+writeFileSync(
+  join(stage, '.mcp.json'),
+  `${JSON.stringify(
+    {
+      mcpServers: {
+        'im-agent-team': {
+          command: '${QODER_NODE_RUNTIME}',
+          args: ['${QODER_PLUGIN_ROOT}/runtime/bin/im-agent-team-mcp.mjs'],
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`,
+  'utf8',
+);
 
 if (process.platform === 'win32') {
   const tarExe = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');

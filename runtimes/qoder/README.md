@@ -4,7 +4,7 @@
 
 - 在 Qoder 里 `@feishu`（Agent）初始化、查看状态、发送测试消息；
 - 用 `/connect` 或 `/status`（命令）执行同样的流程；
-- MCP 工具由 `bin/im-agent-team-mcp.mjs` 提供。
+- MCP 工具由 `bin/im-agent-team-mcp.mjs`（打包后为 `runtime/bin/im-agent-team-mcp.mjs`）提供。
 
 ## 安装
 
@@ -14,12 +14,16 @@ Qoder IDE：
 2. **Extensions → Plugins → Add Plugins → Upload Plugin** 选择 zip；
 3. 安装后新开任务，输入 `@feishu` 或 `/connect`。
 
-Qoder CLI：
+Qoder CLI（先构建）：
 
 ```bash
-qoder plugins install C:\path\to\im-agent-team\runtimes\qoder
+cd runtimes/qoder
+node build.mjs
+qoder plugins install C:\path\to\im-agent-team\runtimes\qoder\dist\qoder-plugin
 qoder plugins list
 ```
+
+不要直接安装 `runtimes/qoder` 源码目录：Qoder 安装器会剔除顶层 `node_modules`；构建后的 `runtime/node_modules` 才会被保留。
 
 ## 当前能力
 
@@ -122,12 +126,12 @@ node build.mjs
 ZIP 内包含：
 
 - `.qoder-plugin/`、`agents/`、`commands/`、`skills/`
-- `bin/` MCP server
-- `connector/` 飞书 WS
-- `runtime/` Agent SDK 运行时
-- `node_modules/` 飞书 SDK、Qoder Agent SDK、zod
+- `runtime/bin/` MCP server
+- `runtime/connector/` 飞书 WS
+- `runtime/runtime/` Agent SDK 运行时
+- `runtime/node_modules/` 飞书 SDK、Qoder Agent SDK、zod
 
-`node_modules` 由 npm 在 staging 目录重新安装为真实文件，不使用 pnpm 的绝对符号链接；`QODER_SKIP_DOWNLOAD=1` + `--ignore-scripts` 确保不会把 qodercli 二进制打进插件。发布包的 `package.json` 不声明运行时依赖，依赖全部 vendored 在 `node_modules`，安装时不需要 npm registry。
+Qoder 安装器会剔除顶层 `node_modules`，所以运行时和依赖都放在 `runtime/`（与官方插件一致）。`runtime/node_modules` 由 npm 在 staging 目录重新安装为真实文件，不使用 pnpm 的绝对符号链接；`QODER_SKIP_DOWNLOAD=1` + `--ignore-scripts` 确保不会把 qodercli 二进制打进插件。发布包的 `package.json` 不声明运行时依赖，依赖全部 vendored 在 `runtime/node_modules`，安装时不需要 npm registry。
 
 ## 依赖
 

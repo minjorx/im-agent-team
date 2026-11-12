@@ -195,8 +195,8 @@ Qoder 插件内的 MCP server / daemon
 ### P3：打包与上架
 
 - 插件 ZIP 通过 `cd runtimes/qoder && node build.mjs` 生成；
-- ZIP 根目录包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`bin/`、`connector/`、`runtime/`、`.mcp.json`、`node_modules`（飞书 SDK）；
-- `build.mjs` 会自动把 `runtime/` 和 `node_modules` 放进 staging，不需要手工复制；
+- ZIP 根目录包含 `.qoder-plugin/`、`agents/`、`commands/`、`skills/`、`.mcp.json`、`runtime/bin`（MCP server）、`runtime/connector`、`runtime/runtime`、`runtime/node_modules`；
+- Qoder 安装器会剔除顶层 `node_modules`，所以依赖必须放在 `runtime/node_modules`（官方插件同款布局）；
 - 走 QoderWork “设置 → 我的发布”或 Qoder CN `apphub-publications`；
 - 写清 SDK 权限用途、飞书权限、隐私说明。
 
@@ -227,8 +227,8 @@ Qoder 插件内的 MCP server / daemon
 
 ```bash
 # 校验/安装插件
-qoder plugins validate runtimes/qoder
-qoder plugins install runtimes/qoder
+qoder plugins validate runtimes/qoder/dist/qoder-plugin
+qoder plugins install runtimes/qoder/dist/qoder-plugin
 qoder plugins list
 
 # 连接器单测

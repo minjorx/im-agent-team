@@ -248,10 +248,10 @@ runtimes/qoder/
 已在本机通过：
 
 ```bash
-qoder plugins validate runtimes/qoder
+qoder plugins validate runtimes/qoder/dist/qoder-plugin
 # components: skills 1, agents 1, commands 2, mcp-servers 1
 
-qoder plugins install runtimes/qoder
+qoder plugins install runtimes/qoder/dist/qoder-plugin
 # im-agent-team@local v0.4.0, enabled
 ```
 
