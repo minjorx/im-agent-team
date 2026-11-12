@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { JsonStore } from './lib/bridge-core/store.js';
 import { MockChannel } from './lib/channels/mock/channel.js';
@@ -9,6 +9,7 @@ import { SubagentRuntime } from './runtimes/dsh/subagent.js';
 import { normalizeConfig } from './lib/bridge-core/config.js';
 import { resolveStateDir } from './lib/bridge-core/state-dir.js';
 import { buildSyntheticMessage } from './lib/channels/feishu/normalize.js';
+import { createFeishuOnboardManager } from './lib/channels/feishu/onboard.js';
 
 const LOG_PREFIX = '[im-agent-team]';
 const STATE_DIR = resolveStateDir();
@@ -173,6 +174,87 @@ function installFetchProbeV4() {
   return globalThis.__dshFeishuFetchProbe;
 }
 
+function describeError(error, depth = 0) {
+  if (!error || depth > 4) return String(error || '');
+  if (typeof error !== 'object') return String(error);
+  const result = {
+    name: error.name,
+    message: error.message,
+    code: error.code,
+    errno: error.errno,
+    syscall: error.syscall,
+    status: error.status,
+    type: error.type,
+    stack: depth === 0 ? String(error.stack || '').slice(0, 2000) : undefined,
+  };
+  if (error.cause && error.cause !== error) result.cause = describeError(error.cause, depth + 1);
+  return result;
+}
+
+function installLlmErrorLog(ctx) {
+  const file = join(STATE_DIR, 'llm-errors.log');
+  return ctx.effect(() => {
+    const llm = ctx.get('llm');
+    const logFailure = (error, options) => {
+      try {
+        appendFileSync(
+          file,
+          `${JSON.stringify({
+            at: new Date().toISOString(),
+            provider: options?.provider,
+            model: options?.model,
+            purpose: options?.purpose,
+            failure: describeError(error),
+          })}\n`,
+          'utf8',
+        );
+      } catch {
+        // ignore logging failures
+      }
+    };
+    const wrap = (stream, options) =>
+      (async function* () {
+        try {
+          for await (const chunk of stream) yield chunk;
+        } catch (error) {
+          logFailure(error, options);
+          throw error;
+        }
+      })();
+    const disposers = [];
+    if (llm && typeof llm.stream === 'function') {
+      const original = llm.stream.bind(llm);
+      llm.stream = (options) => wrap(original(options), options);
+      disposers.push(() => {
+        llm.stream = original;
+      });
+    }
+    if (llm && typeof llm.prepareCall === 'function') {
+      const original = llm.prepareCall.bind(llm);
+      llm.prepareCall = async (...args) => {
+        const prepared = await original(...args);
+        if (prepared && typeof prepared.stream === 'function') {
+          const stream = prepared.stream.bind(prepared);
+          prepared.stream = (options) => wrap(stream(options), options);
+        }
+        return prepared;
+      };
+      disposers.push(() => {
+        llm.prepareCall = original;
+      });
+    }
+    return () => {
+      for (const dispose of disposers.splice(0)) {
+        try {
+          dispose();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, 'im-agent-team.llmErrorLog()');
+}
+
 function loadConfig(raw = {}) {
   let merged = raw || {};
   const inline = process.env.IM_AGENT_TEAM_CONFIG_JSON || process.env.FEISHU_TEAM_CONFIG_JSON;
@@ -226,6 +308,8 @@ export function apply(ctx, rawConfig) {
   const fetchProbe = config.debug ? installFetchProbeV4() : { log: [] };
   const store = new JsonStore(config.stateDir);
   const controllers = [];
+  const channels = [];
+  const startedAccounts = new Map();
   let stopping = false;
 
   const debugTool = {
@@ -478,7 +562,188 @@ export function apply(ctx, rawConfig) {
     return { ok: false, data: { error: `unknown action ${action}` } };
   }
 
+  installLlmErrorLog(ctx);
   ctx.effect(() => ctx.tools.register(debugTool), 'im-agent-team.debugTool()');
+
+  const onboard = createFeishuOnboardManager({
+    stateDir: STATE_DIR,
+    logger,
+    accountDefaults: {
+      runtime: config.runtime,
+      fullAccess: true,
+      awareness: 'mentions',
+      echo: false,
+    },
+  });
+
+  const onboardTool = {
+    name: 'feishu_team_onboard',
+    description:
+      'Connect a new Feishu bot without a terminal. action=start returns the official QR link; ' +
+      'poll action=status until done; the new account channel starts automatically. ' +
+      'Use action=reload to start accounts added to config.json.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['start', 'status', 'reload', 'list'],
+          description:
+            'start: begin QR onboarding; status: poll and auto-start the account; reload: start all configured accounts; list: list started accounts.',
+        },
+        name: { type: 'string', description: 'Bot display name for start.' },
+        id: { type: 'string', description: 'Local account id for start.' },
+      },
+      required: ['action'],
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          ok: { type: 'boolean' },
+          data: { type: 'object' },
+        },
+      },
+      render: (_args, value) => [
+        { type: 'text', text: JSON.stringify(value.data ?? value, null, 2).slice(0, 8000) },
+      ],
+    },
+    presentCall: (args) => ({ card: 'generic', title: 'Feishu onboarding', kind: 'other', rawInput: args }),
+    async execute(args) {
+      const action = args?.action || 'status';
+      if (action === 'start') {
+        const state = await onboard.start({
+          name: args.name || 'DSH Assistant',
+          id: args.id || 'assistant',
+        });
+        return JSON.parse(JSON.stringify({ ok: true, data: state }));
+      }
+      if (action === 'status') {
+        const state = onboard.status();
+        let started = false;
+        if (state.status === 'done' && state.account) {
+          try {
+            const refreshed = normalizeConfig(loadConfig(rawConfig));
+            const account = refreshed.accounts.find((item) => item.id === state.account.id);
+            if (account) started = Boolean(await startAccount(account));
+          } catch (error) {
+            return JSON.parse(
+              JSON.stringify({
+                ok: false,
+                data: { ...state, error: error?.message || String(error) },
+              }),
+            );
+          }
+        }
+        return JSON.parse(JSON.stringify({ ok: true, data: { ...state, started } }));
+      }
+      if (action === 'reload') {
+        const results = [];
+        try {
+          const refreshed = normalizeConfig(loadConfig(rawConfig));
+          for (const account of refreshed.accounts) {
+            try {
+              const entry = await startAccount(account);
+              results.push({ id: account.id, started: Boolean(entry) });
+            } catch (error) {
+              results.push({ id: account.id, error: error?.message || String(error) });
+            }
+          }
+          return JSON.parse(JSON.stringify({ ok: true, data: { accounts: results } }));
+        } catch (error) {
+          return JSON.parse(
+            JSON.stringify({ ok: false, data: { error: error?.message || String(error) } }),
+          );
+        }
+      }
+      if (action === 'list') {
+        return JSON.parse(
+          JSON.stringify({ ok: true, data: { accounts: [...startedAccounts.keys()] } }),
+        );
+      }
+      return JSON.parse(JSON.stringify({ ok: false, data: { error: `unknown action ${action}` } }));
+    },
+  };
+
+  ctx.effect(() => ctx.tools.register(onboardTool), 'im-agent-team.onboardTool()');
+
+  async function startAccount(account) {
+    if (!account || !account.enabled) return undefined;
+    if (stopping) return undefined;
+    if (startedAccounts.has(account.id)) return startedAccounts.get(account.id);
+    if (account.channel === 'feishu' && (!account.appId || !account.appSecret)) {
+      logger.warn(`${LOG_PREFIX} skip ${account.id}: missing appId/appSecret`);
+      return undefined;
+    }
+
+    const handlers = {};
+    const channel =
+      account.channel === 'mock'
+        ? new MockChannel({ account, handlers, logger })
+        : new FeishuChannel({ account, handlers, logger });
+    await channel.start();
+    if (account.channel === 'feishu') await channel.waitReady?.();
+    channels.push(channel);
+
+    const byChat = new Map();
+    const accountControllers = [];
+    const ensureController = async (chatId, chatName) => {
+      const key = `${account.id}:${chatId}`;
+      let controller = byChat.get(key);
+      if (controller) return controller;
+      const scopedAccount =
+        chatId && !account.chatIds.includes(chatId)
+          ? { ...account, chatIds: [...account.chatIds, chatId] }
+          : account;
+      controller = new TeamController({
+        account: scopedAccount,
+        channel,
+        store,
+        team: config.team,
+        outbound: config.outbound,
+        logger,
+        chatId,
+        chatName: chatName || account.chatName,
+        features: config.features,
+      });
+      const runtime =
+        account.runtime === 'subagent' || config.runtime === 'subagent'
+          ? new SubagentRuntime({ ctx, controller, logger })
+          : new DshRuntime({ ctx, controller, logger });
+      controller.runtime = runtime;
+      byChat.set(key, controller);
+      accountControllers.push(controller);
+      controllers.push(controller);
+      await controller.start({ channelStarted: true });
+      return controller;
+    };
+
+    const initialChats = account.chatIds.length ? account.chatIds : ['oc_debug'];
+    for (const chatId of initialChats) await ensureController(chatId, account.chatName);
+    const fallback = byChat.values().next().value;
+
+    handlers.onMessage = async (message) => {
+      if (message.chatType === 'p2p') {
+        await fallback?.handleInbound(message);
+        return;
+      }
+      let controller = byChat.get(`${account.id}:${message.chatId}`);
+      if (!controller) controller = await ensureController(message.chatId, message.chatName);
+      await controller.handleInbound(message);
+    };
+    handlers.onBotAdded = async (event) => {
+      if (!event?.chatId) return;
+      logger.info(`${LOG_PREFIX} [${account.id}] added to ${event.chatId} (${event.chatName || ''})`);
+      await ensureController(event.chatId, event.chatName);
+    };
+
+    const entry = { account, channel, controllers: accountControllers, byChat };
+    startedAccounts.set(account.id, entry);
+    return entry;
+  }
+
 
   ctx.effect(() => {
     let disposed = false;
@@ -486,64 +751,12 @@ export function apply(ctx, rawConfig) {
       await store.load();
       if (disposed) return;
       for (const account of config.accounts) {
-        if (!account.enabled) continue;
-        const handlers = {};
-        const channel =
-          account.channel === 'mock'
-            ? new MockChannel({ account, handlers, logger })
-            : new FeishuChannel({ account, handlers, logger });
-        await channel.start();
-        if (account.channel === 'feishu') await channel.waitReady?.();
-
-        const byChat = new Map();
-        const ensureController = async (chatId, chatName) => {
-          const key = `${account.id}:${chatId}`;
-          let controller = byChat.get(key);
-          if (controller) return controller;
-          const scopedAccount =
-            chatId && !account.chatIds.includes(chatId)
-              ? { ...account, chatIds: [...account.chatIds, chatId] }
-              : account;
-          controller = new TeamController({
-            account: scopedAccount,
-            channel,
-            store,
-            team: config.team,
-            outbound: config.outbound,
-            logger,
-            chatId,
-            chatName: chatName || account.chatName,
-            features: config.features,
-          });
-          const runtime =
-            account.runtime === 'subagent' || config.runtime === 'subagent'
-              ? new SubagentRuntime({ ctx, controller, logger })
-              : new DshRuntime({ ctx, controller, logger });
-          controller.runtime = runtime;
-          byChat.set(key, controller);
-          controllers.push(controller);
-          await controller.start({ channelStarted: true });
-          return controller;
-        };
-
-        const initialChats = account.chatIds.length ? account.chatIds : ['oc_debug'];
-        for (const chatId of initialChats) await ensureController(chatId, account.chatName);
-        const fallback = byChat.values().next().value;
-
-        handlers.onMessage = async (message) => {
-          if (message.chatType === 'p2p') {
-            await fallback?.handleInbound(message);
-            return;
-          }
-          let controller = byChat.get(`${account.id}:${message.chatId}`);
-          if (!controller) controller = await ensureController(message.chatId, message.chatName);
-          await controller.handleInbound(message);
-        };
-        handlers.onBotAdded = async (event) => {
-          if (!event?.chatId) return;
-          logger.info(`${LOG_PREFIX} [${account.id}] added to ${event.chatId} (${event.chatName || ''})`);
-          await ensureController(event.chatId, event.chatName);
-        };
+        if (disposed) break;
+        try {
+          await startAccount(account);
+        } catch (error) {
+          logger.error(`${LOG_PREFIX} failed to start account ${account.id}`, error);
+        }
       }
       logger.info(`${LOG_PREFIX} started with ${controllers.length} binding(s)`);
     })().catch((error) => {
@@ -553,7 +766,10 @@ export function apply(ctx, rawConfig) {
     return () => {
       disposed = true;
       stopping = true;
-      return Promise.allSettled(controllers.map((controller) => controller.stop())).then(() => store.flush());
+      return Promise.allSettled([
+        ...controllers.map((controller) => controller.stop()),
+        ...channels.map((channel) => channel.stop?.()),
+      ]).then(() => store.flush());
     };
   }, 'im-agent-team.start()');
 

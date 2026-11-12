@@ -15,7 +15,7 @@
 - 真实协作链路：总调度 → 调研员（真实模型）→ 总调度 → 用户；`result` 回执不触发下一跳。
 - 21 个本地测试通过。
 - 运行时：`dsh-native`（常驻 Agent，受当前 DSH 根 Agent 收流问题影响）与 `subagent`（每条消息一个子 Agent，已验证可用）。
-- 扫码创建机器人：`im-agent-team-onboard`（飞书官方 `registerApp` 设备授权流程）。
+- 扫码创建机器人：DSH Agent 工具 `feishu_team_onboard`、Qoder 插件 `feishu_onboard`，以及 CLI `im-agent-team-onboard`（同一套官方 `registerApp` 流程）。
 
 ## 架构与目录（core + adapters）
 
@@ -37,11 +37,11 @@ runtimes/                   # 具体 AI 工具的实现，可分别打包成插�
 | 运行时 \ 渠道 | 飞书 | 其他渠道 |
 |---|---|---|
 | DSH | ✅ 首版 | 新增 channel 即可 |
-| Qoder | 🟡 插件控制面已建，纯插件 connector 待 SDK | 后续 |
+| Qoder | ✅ 插件内 Agent SDK + Qoder worker runtime（无需用户安装 CLI） | 后续 |
 | Claude Code / Codex 等 | 新增 runtime 即可 | 两者分别扩展 |
 
 - 渠道契约与运行时契约见 [docs/adapters.md](docs/adapters.md)。
-- Qoder 接入可行性：[docs/qoder-integration.md](docs/qoder-integration.md)（结论：支持，推荐 Agent SDK，ACP 备选，CLI 用于 POC）。
+- Qoder 接入可行性：[docs/qoder-integration.md](docs/qoder-integration.md)（结论：支持；已按 Agent SDK + Qoder 自带 worker runtime 落地，不需要用户安装 CLI）。
 - 命名：包名定为 **`im-agent-team`**（IM + Agent + Team），内部核心目录为 `bridge-core`。npm 上 `agent-team` 已被占用，`im-agent-team` 当前可用；npm 注册暂不作为发布前提。
 
 ## Qoder 插件
@@ -50,7 +50,9 @@ runtimes/                   # 具体 AI 工具的实现，可分别打包成插�
 
 - `@feishu`：初始化、查看状态、发送测试消息；
 - `/connect`、`/status`：命令入口；
-- MCP 工具：`feishu_status`、`feishu_connect`、`feishu_send`、`feishu_disconnect`。
+- MCP 工具：`feishu_status`、`feishu_onboard`、`feishu_connect`、`feishu_send`、`feishu_disconnect`；
+- 飞书命令：`/mode`、`/plan`、`/model`、`/stop`、`/sessions`、`/models`、`/usage`、`/goal`、`/status`；
+- 审批与提问：工具审批、`AskUserQuestion` 单选/多选通过飞书卡片或文本处理；`/mode bypass` 需二次确认并自动回退。
 
 安装：
 
@@ -59,17 +61,27 @@ qoder plugins install C:\path\to\im-agent-team\runtimes\qoder
 qoder plugins validate C:\path\to\im-agent-team\runtimes\qoder
 ```
 
-打包：
+打包（两个包一起，产物都在根目录 `dist/`）：
+
+```bash
+npm run pack:all
+# dist/im-agent-team-dsh-0.2.1.tgz
+# dist/im-agent-team-qoder-plugin-0.4.0.zip
+```
+
+单独打 Qoder 插件：
 
 ```bash
 cd runtimes/qoder
 node build.mjs
-# → dist/im-agent-team-qoder-plugin-0.2.0.zip
+# → runtimes/qoder/dist/im-agent-team-qoder-plugin-0.4.0.zip
 ```
+
+两个包都自带 `node_modules`，发布包 `package.json` 不声明运行时依赖；安装时不需要 npm registry。区别只在各自对接的 AI 工具运行时。
 
 或在 Qoder **Extensions → Plugins → Add Plugins → Upload Plugin** 上传 ZIP。
 
-当前控制面已可用（状态/发送/连接引导）；实时连接器是依赖 Qoder CLI 的实验版，纯插件方案待 Qoder Plugin SDK。详见 [runtimes/qoder/README.md](runtimes/qoder/README.md) 和 [Qoder 纯插件交接文档](docs/qoder-plugin-handoff.md)。
+当前控制面和实时连接器均可用：插件内通过 `@qoder-ai/qoder-agent-sdk` 驱动 Qoder，使用 Qoder 安装目录自带的 worker runtime 和本机登录态，不需要用户安装 Qoder CLI。飞书消息运行在独立 Qoder session 中，不会注入当前聊天窗口。首次接入由插件内 `feishu_onboard` 完成，不需要终端；CLI onboarding 仍保留为备用。详见 [runtimes/qoder/README.md](runtimes/qoder/README.md) 和 [Qoder 纯插件交接文档](docs/qoder-plugin-handoff.md)。
 
 ## 安装方式
 
@@ -87,22 +99,20 @@ dsh plugin --profile desktop add github:minjorx/im-agent-team
 
 要求：能访问 GitHub。pnpm 也接受 `git+https://...#<commit>` 形式。
 
-### 3. 离线 tarball（适合只能访问 npm、不能访问 GitHub 的环境）
-
-在一台有网络的机器上：
+### 3. 离线 tarball（tarball 自带 node_modules）
 
 ```bash
-pnpm pack
-# 产出 im-agent-team-0.2.0.tgz
+npm run pack:dsh
+# 产出 dist/im-agent-team-dsh-0.2.1.tgz（自包含依赖）
 ```
 
 把 tgz 传到目标机器后：
 
 ```bash
-dsh plugin --profile desktop add ./im-agent-team-0.2.0.tgz
+dsh plugin --profile desktop add ./dist/im-agent-team-dsh-0.2.1.tgz
 ```
 
-注意：pnpm 仍会从 npm registry 解析 `@larksuiteoapi/node-sdk` 和 `qrcode` 两个依赖。目标机器只要能访问 npm（或 npmmirror 等镜像）即可；如果连 npm 也不通，见下方“完全离线”。
+注意：这个 tarball 已经把 `@larksuiteoapi/node-sdk` 和 `qrcode` 打进包内 `node_modules`，目标机器**不需要**访问 npm registry；DSH 内置的 pnpm 只负责把 tarball 装进 profile。
 
 ### 4. 本地目录（开发/内网共享）
 
@@ -114,15 +124,12 @@ dsh plugin --profile desktop add /opt/im-agent-team
 
 ### 完全离线
 
-`dsh plugin add` 通过 pnpm 安装依赖，因此“完全断网”需要满足其一：
-
-1. 内网 npm 镜像（Verdaccio、Nexus、npmmirror 私有代理），把 registry 配到 pnpm；
-2. 预填充目标 profile 的 pnpm store，并让 pnpm 使用 `--offline`（插件管理器不直接暴露该参数，需要预置 profile 依赖后启动）；
-3. 把依赖一起打成一个内网分发包，由内网源安装。
-
-不建议手工把包复制进 profile 的 `node_modules` 后改 `package.json`，这会绕过插件管理器的兼容性校验与锁文件。
+推荐直接用 `npm run pack:dsh` 生成的自包含 tarball（包内已带 `node_modules`），目标机器不需要 npm registry。
+如果要从源码目录安装，`dsh plugin add` 仍会通过 pnpm 解析依赖；此时才需要内网 npm 镜像、预填充 pnpm store，或内网分发包。
 
 ## 扫码创建机器人
+
+DSH 的 Agent 可以直接调用 `feishu_team_onboard`；Qoder 的 `@feishu` 会调用 `feishu_connect` / `feishu_onboard`。两者都使用官方扫码流程，不需要终端。CLI 方式仍保留：
 
 安装后运行 onboarding CLI（首次使用需要先允许扫码授权）：
 
@@ -210,7 +217,7 @@ im-agent-team-role \
 pnpm install
 node --test test/unit.test.js test/controller.test.js
 node --check index.js
-pnpm pack
+npm run pack:all
 ```
 
 ## 发布清单
@@ -219,5 +226,5 @@ pnpm pack
 2. 确认 `engines.dsh` 与目标 DSH 版本一致（当前 `>=0.2.1-rc.3 <0.3.0`）；
 3. `npm publish --access public`（包名 `im-agent-team` 未被占用时）；
 4. `git tag v0.1.0 && git push --tags`；
-5. 在 GitHub Release 附上 `pnpm pack` 生成的 tgz；
+5. 在 GitHub Release 附上 `npm run pack:all` 生成的 `dist/im-agent-team-dsh-0.2.1.tgz`；
 6. 如需市场索引，发布一个 format 1 的 `index.json` 并让用户添加 URL。

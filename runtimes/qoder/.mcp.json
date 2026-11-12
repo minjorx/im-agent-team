@@ -1,8 +1,10 @@
 {
   "mcpServers": {
     "im-agent-team": {
-      "command": "im-agent-team-mcp",
-      "args": []
+      "command": "${QODER_NODE_RUNTIME}",
+      "args": [
+        "${QODER_PLUGIN_ROOT}/bin/im-agent-team-mcp.mjs"
+      ]
     }
   }
 }

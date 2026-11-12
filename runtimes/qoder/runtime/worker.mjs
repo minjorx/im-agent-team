@@ -1,4 +1,5 @@
 import { buildPrompt } from './prompt.mjs';
+import { handleCommand, parseCommand, resolveChatRuntimeSettings } from './commands.mjs';
 
 function flattenPost(content) {
   if (!content) return '';
@@ -37,12 +38,14 @@ export function normalizeEvent(data, selfOpenId) {
   const mentionedMe =
     message.chat_type === 'p2p' ||
     mentions.some((mention) => mention.openId && mention.openId === selfOpenId);
+  const senderOpenId = sender.sender_id?.open_id || sender.sender_id?.user_id || '';
   return {
     messageId: message.message_id,
     chatId: message.chat_id,
     chatType: message.chat_type === 'p2p' ? 'p2p' : 'group',
     senderType: sender.sender_type || 'user',
-    senderName: sender.sender_id?.open_id || '用户',
+    senderOpenId,
+    senderName: sender.sender_name || senderOpenId || '用户',
     mentionedMe,
     text: text.trim(),
   };
@@ -64,6 +67,7 @@ export function createWorker({
   saveSessions = () => {},
   memoryText = () => '',
   logger = console,
+  broker,
 }) {
   const seen = new Set();
 
@@ -75,7 +79,42 @@ export function createWorker({
       seen.add(message.messageId);
       if (seen.size > 500) seen.delete(seen.values().next().value);
 
-      const chat = (sessions.byChat[message.chatId] ||= { sessionId: undefined, history: [] });
+      const chat = (sessions.byChat[message.chatId] ||= {
+        sessionId: undefined,
+        history: [],
+        settings: {},
+      });
+      chat.settings ||= {};
+      chat.history ||= [];
+      const userId = message.senderOpenId || message.senderName;
+      const sendText = (text) => send({ chatId: message.chatId, text });
+
+      const command = parseCommand(message.text);
+      if (command) {
+        await handleCommand({
+          chatId: message.chatId,
+          userId,
+          command,
+          chat,
+          settings,
+          send: sendText,
+          broker,
+          save: () => saveSessions(sessions),
+          accountId: account.appId,
+        });
+        return { handled: true, command: command.name };
+      }
+
+      if (broker?.handleText({ chatId: message.chatId, userId, text: message.text })) {
+        return { handled: true, interaction: true };
+      }
+
+      const runtimeSettings = resolveChatRuntimeSettings({ chat, settings });
+      if (runtimeSettings.expired) {
+        saveSessions(sessions);
+        await sendText('完全访问已过期，已自动回退到 plan 模式。');
+      }
+
       const prompt = buildPrompt({
         role: account.role,
         peers: account.peers || [],
@@ -89,15 +128,31 @@ export function createWorker({
       try {
         result = await runQoder({
           prompt,
-          cwd: settings.cwd,
+          cwd: runtimeSettings.cwd,
           sessionId: chat.sessionId,
-          model: settings.model,
-          permissionMode: settings.permissionMode,
+          model: runtimeSettings.model,
+          permissionMode: runtimeSettings.permissionMode,
           maxTurns: settings.maxTurns,
           timeoutMs: settings.timeoutMs,
+          allowedTools: settings.allowedTools,
+          disallowedTools: settings.disallowedTools,
+          canUseTool: broker?.canUseTool({ chatId: message.chatId, userId }),
+          onElicitation: broker?.onElicitation({ chatId: message.chatId, userId }),
+          onQuery: (q) => broker?.setActiveQuery(message.chatId, q),
+          onQueryEnd: () => {
+            broker?.clearActiveQuery(message.chatId);
+            broker?.cancelPending?.(message.chatId, '任务已结束。');
+          },
+          goal: runtimeSettings.goal,
+          clearGoal: runtimeSettings.clearGoal,
         });
       } catch (error) {
         result = { text: '', error: true, errorMessage: error?.message || String(error) };
+      }
+
+      if (runtimeSettings.clearGoal) {
+        delete chat.settings.clearGoal;
+        saveSessions(sessions);
       }
 
       if (result.error || !result.text) {
@@ -108,7 +163,11 @@ export function createWorker({
       }
 
       chat.sessionId = result.sessionId || chat.sessionId;
-      chat.history = [...chat.history, { role: 'user', text: message.text }, { role: 'agent', text: result.text }].slice(-6);
+      chat.history = [
+        ...chat.history,
+        { role: 'user', text: message.text },
+        { role: 'agent', text: result.text },
+      ].slice(-6);
       saveSessions(sessions);
 
       await send({ chatId: message.chatId, text: result.text });

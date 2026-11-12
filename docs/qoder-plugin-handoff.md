@@ -3,6 +3,10 @@
 > 目标读者：接手继续尝试 Qoder 插件接入的 Agent / 开发者
 > 时间：2026-11-12
 > 结论先行：**个人开发者可以开发、上传、上架 Qoder 插件；但“插件直接驱动 Qoder 聊天会话”的 Plugin SDK 没有公开文档。** 纯插件 + 扫码 + 实时飞书，卡在这里，不是卡在插件开发入口。
+>
+> **2026-11-12 更新（路径 B 已落地）**：插件内已改用 `@qoder-ai/qoder-agent-sdk` + Qoder 安装目录自带的 worker runtime；`qodercliAuth()` 复用本机登录态。用户不需要安装 Qoder CLI，飞书消息会创建独立 Qoder session 并回复到飞书。Plugin SDK 的 `chatSessions.submitRich` 仍没有公开的清单声明方式，因此“把飞书消息注入当前 Qoder 聊天窗口”仍不可用。
+>
+> 交互层也已落地：`canUseTool` / `onElicitation` 已接入飞书卡片和文本回退；`AskUserQuestion` 单选/多选答案通过 `updatedInput.answers` 回填；`/mode`、`/plan`、`/model`、`/stop`、`/sessions`、`/models`、`/usage`、`/goal`、`/status` 已实现；`/mode bypass` 需要二次确认，并按 TTL 自动回退到 `plan`。
 
 ## 1. 目标
 
@@ -39,7 +43,7 @@
 
 ```
 runtimes/qoder/runtime/
-├── cli.mjs                   # qoder -p / --resume
+├── sdk.mjs                   # Qoder Agent SDK + worker runtime
 ├── prompt.mjs                # 角色/团队/记忆 prompt
 └── worker.mjs                # 消息 → Qoder → 回复
 
@@ -53,12 +57,12 @@ runtimes/qoder/
 ├── bin/im-agent-team-mcp.mjs # 控制面 + 实验性连接器
 ├── bin/connector-cli.mjs     # 独立启动连接器（开发用）
 ├── connector/index.mjs       # 飞书 WS + 插件宿主
-├── runtime/                  # Qoder CLI 运行时
+├── runtime/                  # Qoder Agent SDK 运行时（worker）
 ├── build.mjs                 # 生成插件 ZIP
 └── test/connector.test.mjs
 ```
 
-### 2.3 当前连接器为什么不合格
+### 2.3 历史：CLI 连接器为什么不合格
 
 `runtimes/qoder/connector/index.mjs` 目前：
 
@@ -68,6 +72,8 @@ runtimes/qoder/
 - 把结果发回飞书。
 
 它**依赖 Qoder CLI 在 PATH 且已登录**。这不符合“普通用户只装插件、扫码就用”的目标，只能作为开发/验证代码，不应作为最终发布方案。
+
+> 更新：`runtime/sdk.mjs` 已替换上述 CLI 连接器。现在通过 `@qoder-ai/qoder-agent-sdk` 的 `query()` + `WorkerTransport` 驱动 Qoder 安装目录自带的 `qoder-worker-runtime.obf.mjs`，认证用 `qodercliAuth()` 复用 Qoder 本机登录态，不再需要用户安装 Qoder CLI。首次创建飞书应用已由插件内 `feishu_onboard` 覆盖，CLI onboarding 仅保留为备用。
 
 ## 3. Qoder 插件不是官方专属
 
@@ -179,9 +185,11 @@ Qoder 插件内的 MCP server / daemon
 
 ### P2：替换 CLI 连接器
 
-1. `connector/index.mjs` 把 `runQoderCli` 替换为 `sdk.submit`；
+> 状态：已完成（2026-11-12）。见 `runtimes/qoder/runtime/sdk.mjs`。
+
+1. `connector/index.mjs` 把 `runQoderCli` 替换为 `runQoderSdk`（`runtime/sdk.mjs`，内部使用 `query()` + `WorkerTransport`）；
 2. 保留飞书 WS、去重、会话映射、prompt 构建；
-3. 删除/隔离 `runtimes/qoder/runtime/cli.mjs`，避免误用；
+3. 已删除 `runtimes/qoder/runtime/cli.mjs`，避免误用；
 4. 在干净机器上验收（只装 Qoder IDE，不装 Qoder CLI）。
 
 ### P3：打包与上架
@@ -196,7 +204,7 @@ Qoder 插件内的 MCP server / daemon
 
 在**全新 Windows** 上：
 
-1. 只安装 Qoder IDE，不安装 Qoder CLI，PATH 中无 `qoder`；
+1. 只安装 Qoder IDE，不安装 Qoder CLI，PATH 中无 `qoder`（当前实现即按此目标设计；已完成本机实测：无 CLI、无随包下载，使用 Qoder worker runtime 成功完成查询与会话续聊）；
 2. 安装插件 ZIP；
 3. 新会话 `@feishu` 或 `/connect`；
 4. 扫码创建飞书应用/测试群；

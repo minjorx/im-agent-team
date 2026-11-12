@@ -181,19 +181,18 @@ runtimes/qoder/
 └── build.mjs            # 生成 Qoder 插件 ZIP
 ```
 
-目标方案（Plugin SDK 可用后）：把 `runtime/cli.mjs` 替换为 `chatSessions.submit/read`，`prompt/worker` 保留。
+当前已落地：`runtime/sdk.mjs` 使用 Agent SDK + Qoder 自带 worker runtime。Plugin SDK 的 `chatSessions.submit/read` 仍作为未来“把消息注入当前 Qoder 会话”的方案。
 
 Qoder 是独立插件，不经过 DSH 的 `index.js` 运行时工厂；`bridge-core` 的协议/名册/记忆/防环可以复用。
 
-POC 顺序：
+POC / 落地顺序（当前状态）：
 
-1. 安装 Qoder CLI（国际版 `qoder` 或 CN 版 `qodercn`），完成登录/PAT；
-2. `qoder -p "只回复 OK" --output-format json` 验证认证与输出；
-3. 用 `--resume <session_id>` + 第二轮 prompt 验证会话恢复；
-4. 安装 SDK，在临时项目里跑 `query()` 一次性与多轮；
-5. 实现 `QoderRuntime`，用 `channels/mock` 跑 bridge e2e；
-6. 在真实飞书群接入一个 Qoder bot，验证 @、回传、防环；
-7. 需要时再实现 ACP。
+1. 安装 Qoder IDE 并登录（不需要安装 Qoder CLI）；
+2. 安装 `@qoder-ai/qoder-agent-sdk`，在临时项目里验证 `query()` 与 `resume`；
+3. 用 `WorkerTransport` 指向 Qoder 自带的 worker runtime，验证无 CLI 查询；
+4. 实现 `QoderRuntime`（`runtime/sdk.mjs`），用 `channels/mock` 跑 bridge e2e；
+5. 在真实飞书群接入一个 Qoder bot，验证 @、回传、防环；
+6. 需要时再实现 ACP，或等待 Plugin SDK 开放会话注入。
 
 预估：
 
@@ -242,7 +241,7 @@ runtimes/qoder/
 ├── .mcp.json                 # 本地 MCP server
 ├── bin/im-agent-team-mcp.mjs
 ├── connector/index.mjs       # 飞书 WS + 插件宿主
-├── runtime/                  # Qoder CLI 运行时（实验）
+├── runtime/                  # Qoder Agent SDK 运行时（worker）
 └── build.mjs                 # 生成插件 ZIP
 ```
 
@@ -253,7 +252,7 @@ qoder plugins validate runtimes/qoder
 # components: skills 1, agents 1, commands 2, mcp-servers 1
 
 qoder plugins install runtimes/qoder
-# im-agent-team@local v0.2.0, enabled
+# im-agent-team@local v0.4.0, enabled
 ```
 
 打包：
@@ -261,19 +260,19 @@ qoder plugins install runtimes/qoder
 ```bash
 cd runtimes/qoder
 node build.mjs
-# → dist/im-agent-team-qoder-plugin-0.2.0.zip
+# → dist/im-agent-team-qoder-plugin-0.4.0.zip
 ```
 
 当前 MCP 工具：
 
 - `feishu_status`：读取本机 `~/.dsh/im-agent-team` 配置/状态；
 - `feishu_send`：通过已配置机器人发文本；
-- `feishu_connect`：有对应账号时启动实验性连接器；无账号时返回 onboarding 命令；
+- `feishu_connect`：有对应账号时启动连接器；无账号时自动启动扫码 onboarding；
 - `feishu_disconnect`：停止连接器。
 
-**实验版**：常驻飞书 WebSocket + `qoder -p` 会话 + 回复飞书的 connector 已实现，但依赖 Qoder CLI 在 PATH 且已登录。它不符合“纯插件、无 CLI”的目标，只作为验证代码。
+**当前实现**：常驻飞书 WebSocket + `@qoder-ai/qoder-agent-sdk` + Qoder 自带 worker runtime。用户不需要安装 Qoder CLI，认证复用 Qoder 本机登录态；飞书消息运行在独立 Qoder session 中。
 
-**目标方案**：改用 Qoder Plugin SDK 的 `chatSessions.submit/read`，让插件直接驱动 Qoder 会话。该能力在 Qoder 内部存在（consent scope 可在 `app.asar` 中找到），但没有公开文档/API。
+**未来方案**：如果 Qoder 公开 Plugin SDK 的 `chatSessions.submit/read`，可以改为把消息注入当前 Qoder 会话。该能力在 Qoder 内部存在（consent scope 可在 `app.asar` 中找到），但清单声明方式和客户端 API 没有公开。
 
 详见 [Qoder 纯插件交接文档](qoder-plugin-handoff.md)。
 

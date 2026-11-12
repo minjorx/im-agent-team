@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createWorker, normalizeEvent, shouldHandle } from '../runtime/worker.mjs';
-import { parseQoderOutput, runQoderCli } from '../runtime/cli.mjs';
+import { mapPermissionMode, resolveQoderWorkerRuntime, runQoderSdk } from '../runtime/sdk.mjs';
 
 const selfOpenId = 'ou_self';
 
@@ -34,11 +37,13 @@ test('bot messages and unmentioned group messages are ignored', () => {
   assert.equal(shouldHandle(unmentioned), false);
 });
 
-test('parseQoderOutput reads result and session id', () => {
-  const parsed = parseQoderOutput('{"type":"result","result":"OK","session_id":"s-1"}');
-  assert.equal(parsed.text, 'OK');
-  assert.equal(parsed.sessionId, 's-1');
-  assert.equal(parsed.error, false);
+test('plan permission mode maps to SDK planMode', () => {
+  assert.deepEqual(mapPermissionMode('plan'), { permissionMode: 'default', planMode: true });
+  assert.deepEqual(mapPermissionMode('acceptEdits'), { permissionMode: 'acceptEdits' });
+  assert.deepEqual(mapPermissionMode('yolo'), {
+    permissionMode: 'bypassPermissions',
+    allowDangerouslySkipPermissions: true,
+  });
 });
 
 test('worker calls Qoder, sends the reply and persists the session', async () => {
@@ -91,10 +96,79 @@ test('duplicate message ids are processed once', async () => {
   assert.equal(calls, 1);
 });
 
-test('QODER_MOCK short-circuits the CLI', async () => {
+test('commands are handled without calling Qoder', async () => {
+  const sent = [];
+  let calls = 0;
+  const worker = createWorker({
+    account: { appId: 'cli_test', selfOpenId, role: { name: '调研员' }, peers: [] },
+    settings: { permissionMode: 'plan', cwd: 'C:/work' },
+    sessions: { byChat: {} },
+    saveSessions: () => {},
+    send: async (payload) => sent.push(payload),
+    runQoder: async () => {
+      calls += 1;
+      return { text: 'ok' };
+    },
+    broker: { pendingCount: () => 0, record: () => {}, cancelChat: async () => false },
+  });
+
+  const result = await worker.handleEvent(event({ text: '@_user_1 /mode plan' }));
+  assert.equal(result.command, 'mode');
+  assert.equal(calls, 0);
+  assert.match(sent.at(-1).text, /权限模式/);
+});
+
+test('pending interaction messages are consumed without calling Qoder', async () => {
+  let calls = 0;
+  let handled;
+  const worker = createWorker({
+    account: { appId: 'cli_test', selfOpenId, role: { name: '调研员' }, peers: [] },
+    settings: { permissionMode: 'default', cwd: 'C:/work' },
+    sessions: { byChat: {} },
+    saveSessions: () => {},
+    send: async () => {},
+    runQoder: async () => {
+      calls += 1;
+      return { text: 'ok' };
+    },
+    broker: {
+      handleText: ({ text }) => {
+        handled = text;
+        return true;
+      },
+      pendingCount: () => 1,
+      record: () => {},
+    },
+  });
+
+  const result = await worker.handleEvent(event({ text: '@_user_1 A' }));
+  assert.equal(result.interaction, true);
+  assert.equal(handled, 'A');
+  assert.equal(calls, 0);
+});
+
+test('QODER_MOCK short-circuits the SDK', async () => {
   process.env.QODER_MOCK = '1';
-  const result = await runQoderCli({ prompt: '只回复 OK', cwd: process.cwd() });
+  const result = await runQoderSdk({ prompt: '只回复 OK', cwd: process.cwd() });
   assert.match(result.text, /\[mock\]/);
   assert.equal(result.sessionId, 'mock-session');
   delete process.env.QODER_MOCK;
+});
+
+test('resolveQoderWorkerRuntime honors QODER_WORKER_RUNTIME', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'qoder-worker-'));
+  const worker = join(dir, 'qoder-worker-runtime.obf.mjs');
+  writeFileSync(worker, '// worker');
+  writeFileSync(
+    join(dir, 'runtime-info.json'),
+    JSON.stringify({ version: 'test', platforms: [`${process.platform}-${process.arch}`] }),
+  );
+
+  const found = resolveQoderWorkerRuntime({
+    env: { QODER_WORKER_RUNTIME: worker },
+    roots: [],
+  });
+  assert.equal(found?.path, worker);
+  assert.equal(found?.info.version, 'test');
+  rmSync(dir, { recursive: true, force: true });
 });

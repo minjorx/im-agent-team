@@ -3,34 +3,50 @@
  * Minimal zero-dependency MCP server for the im-agent-team Qoder plugin.
  *
  * It is the control plane the @feishu agent talks to:
- *   - feishu_status: read local im-agent-team config/state
- *   - feishu_connect: start the onboarding instructions / check configuration
+ *   - feishu_status: read local im-agent-team config/state and onboarding progress
+ *   - feishu_onboard: start/report the official QR onboarding flow
+ *   - feishu_connect: start the connector, auto-starting onboarding when needed
  *   - feishu_send: send a text message through the configured Feishu bot
- *   - feishu_disconnect: stop guidance
+ *   - feishu_disconnect: stop the connector
  *
- * The long-running Feishu WebSocket connector is a separate process and is not
- * managed by this MCP server yet; this server never claims it is connected.
+ * The Feishu WebSocket connector runs in-process via connector/index.mjs.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import readline from 'node:readline';
+import { createOnboardManager } from '../connector/onboard.mjs';
+
+const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
 const stateDir = join(dshHome, 'im-agent-team');
 const configFile = join(stateDir, 'config.json');
 const appsFile = join(stateDir, 'feishu-apps.json');
 const stateFile = join(stateDir, 'state.json');
+const onboard = createOnboardManager({ stateDir, logger: console });
 
 const TOOLS = [
   {
     name: 'feishu_status',
-    description: '查看本机 im-agent-team 的飞书机器人配置、绑定群和连接器状态。',
+    description: '查看本机 im-agent-team 的飞书机器人配置、扫码接入进度、绑定群和连接器状态。',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'feishu_onboard',
+    description: '首次创建/绑定飞书机器人：启动官方扫码授权并返回授权链接；再次调用查询进度。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '机器人显示名，默认 Qoder Agent' },
+        id: { type: 'string', description: '本地账号 id，默认 qoder' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'feishu_connect',
-    description: '初始化/检查当前 Qoder 到飞书机器人的连接；未配置时返回 onboarding 命令。',
+    description: '连接当前 Qoder 到飞书机器人；未配置时自动启动扫码 onboarding。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -110,9 +126,7 @@ async function statusTextAsync() {
       '🔴 尚未配置飞书机器人。',
       `配置目录：${stateDir}`,
       '',
-      '下一步运行 onboarding（扫码创建/复用应用）：',
-      '  im-agent-team-onboard --name "Qoder Agent" --id qoder',
-      '或：node <im-agent-team>/bin/onboard.mjs --name "Qoder Agent" --id qoder',
+      '下一步：调用 feishu_connect（或 feishu_onboard）启动官方扫码；把返回的授权链接交给用户打开。',
     );
   } else {
     lines.push(
@@ -121,6 +135,14 @@ async function statusTextAsync() {
       `本地状态 binding 数：${bindings}`,
     );
   }
+
+  const onboardState = onboard.status();
+  if (onboardState.status !== 'idle') {
+    lines.push('', `扫码接入：${onboardState.status}${onboardState.id ? ` (${onboardState.id})` : ''}`);
+    if (onboardState.url) lines.push(`授权链接：${onboardState.url}`);
+    if (onboardState.expireIn) lines.push(`有效期：约 ${onboardState.expireIn} 秒`);
+    if (onboardState.error) lines.push(`错误：${onboardState.error}`);
+  }
   try {
     const { getStatus } = await connector();
     const status = getStatus();
@@ -128,6 +150,14 @@ async function statusTextAsync() {
       '',
       `连接器：${status.running ? '🟢 running' : '⚪ stopped'}`,
       ...status.accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
+      `Qoder 运行时：${status.runtime?.mode || 'unknown'}${status.runtime?.available === false ? '（不可用）' : ''}`,
+      ...(status.runtime?.version
+        ? [`- worker ${status.runtime.version}${status.runtime.target ? ` · ${status.runtime.target}` : ''}`]
+        : []),
+      ...(status.runtime?.available === false && status.runtime?.error
+        ? [`运行时错误：${status.runtime.error}`]
+        : []),
+      ...(status.pendingInteractions ? [`待处理交互：${status.pendingInteractions}`] : []),
     );
     if (status.lastError) lines.push(`最近错误：${status.lastError}`);
   } catch (error) {
@@ -189,20 +219,76 @@ async function connectText({ name = 'Qoder Agent', id = 'qoder' } = {}) {
       return `🔴 启动连接器失败：${error?.message || error}`;
     }
   }
-  return [
-    '🔴 还没有 id 为 `' + id + '` 的飞书机器人配置。请在终端运行：',
-    '',
-    `  im-agent-team-onboard --name "${name}" --id ${id}`,
-    '',
-    '它会：1) 打印官方扫码链接；2) 创建应用并保存凭据；3) 自动创建测试群。',
-    '扫码完成后告诉我，我再调用 feishu_connect 启动连接器。',
-  ].join('\n');
+
+  const state = await onboard.start({ name, id });
+  if (state.status === 'done') {
+    try {
+      const { startConnector } = await connector();
+      const status = await startConnector({ accountIds: [id] });
+      return [
+        `🟢 已创建并启动飞书连接器：${id}`,
+        ...status.accounts.map((account) => `- ${account.name} (${account.id}) · ${account.appId}`),
+        '',
+        '现在到飞书群里 @ 这个机器人即可。',
+      ].join('\n');
+    } catch (error) {
+      return `🟢 机器人已创建，但连接器启动失败：${error?.message || error}\n请再次调用 feishu_connect。`;
+    }
+  }
+  if (state.status === 'waiting') {
+    return [
+      `🟡 正在为 ${id} 创建飞书机器人。请打开下面的链接完成扫码授权：`,
+      state.url,
+      '',
+      '扫码完成后告诉我，或再次调用 feishu_status；确认后我会启动连接器。',
+      '不需要在对话里粘贴 App Secret。',
+    ].join('\n');
+  }
+  return formatOnboardState(state);
+}
+
+function formatOnboardState(state) {
+  if (!state) return '🔴 无法读取扫码接入状态。';
+  switch (state.status) {
+    case 'waiting':
+      return [
+        `🟡 请打开下面的链接完成飞书扫码授权（${state.id}）：`,
+        state.url,
+        '',
+        `有效期约 ${state.expireIn || '未知'} 秒。扫码完成后告诉我，或再次调用 feishu_status。`,
+        '不需要在对话里粘贴 App Secret。',
+      ].join('\n');
+    case 'done':
+      if (state.existing) {
+        return `🟢 已存在账号 ${state.id || ''} (${state.appId || ''})。现在调用 feishu_connect 启动连接器。`;
+      }
+      return [
+        `🟢 已创建飞书机器人：${state.id} · ${state.appId}`,
+        state.chatId
+          ? `测试群：${state.chatName || ''} (${state.chatId})`
+          : '未创建测试群；把机器人拉进群后 @ 它即可。',
+        '现在调用 feishu_connect 启动连接器。',
+      ].join('\n');
+    case 'error':
+      return `🔴 扫码接入失败：${state.error}\n可再次调用 feishu_onboard 或 feishu_connect 重试。`;
+    case 'saving':
+      return '🟡 已扫码，正在保存凭据并创建测试群，请稍后再次调用 feishu_status。';
+    default:
+      return `🟡 扫码接入状态：${state.status}，请稍后再次调用 feishu_status。`;
+  }
+}
+
+async function onboardText({ name = 'Qoder Agent', id = 'qoder' } = {}) {
+  const state = await onboard.start({ name, id });
+  return formatOnboardState(state);
 }
 
 async function callTool(name, args) {
   switch (name) {
     case 'feishu_status':
       return await statusText();
+    case 'feishu_onboard':
+      return await onboardText(args);
     case 'feishu_connect':
       return await connectText(args);
     case 'feishu_send':
@@ -244,7 +330,7 @@ rl.on('line', async (line) => {
       result: {
         protocolVersion: params?.protocolVersion || '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'im-agent-team', version: '0.2.0' },
+        serverInfo: { name: 'im-agent-team', version: packageJson.version },
       },
     });
     return;

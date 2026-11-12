@@ -2,8 +2,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import * as Lark from '@larksuiteoapi/node-sdk';
+import { createInteractionBroker } from './interactions.mjs';
 import { createWorker } from '../runtime/worker.mjs';
-import { runQoderCli } from '../runtime/cli.mjs';
+import { describeQoderRuntime, runQoderSdk, shutdownQoderSdk } from '../runtime/sdk.mjs';
 
 const dshHome = process.env.DSH_HOME || join(homedir(), '.dsh');
 const stateDir = join(dshHome, 'im-agent-team');
@@ -20,6 +21,8 @@ const runtime = {
   sessions: { version: 1, byAccount: {} },
   lastError: undefined,
   lastMessageAt: 0,
+  runtimeInfo: undefined,
+  brokers: [],
 };
 
 function readJson(file, fallback) {
@@ -60,6 +63,8 @@ function accountSettings() {
     permissionMode: process.env.QODER_CONNECTOR_PERMISSION || qoder.permissionMode || 'plan',
     maxTurns: Number(qoder.maxTurns || 8),
     timeoutMs: Number(qoder.timeoutMs || 180_000),
+    allowedTools: qoder.allowedTools,
+    disallowedTools: qoder.disallowedTools,
   };
 }
 
@@ -113,6 +118,58 @@ async function sendText(account, chatId, text) {
   return data.data;
 }
 
+async function sendCard(account, chatId, card) {
+  const token = await tenantToken(account);
+  const response = await fetch('https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify({
+      receive_id: chatId,
+      msg_type: 'interactive',
+      content: JSON.stringify(card),
+    }),
+  });
+  const data = await response.json();
+  if (data.code !== 0) throw new Error(`send card failed: ${data.code} ${data.msg}`);
+  return data.data;
+}
+
+function handleCardAction(account, broker, data) {
+  let value =
+    data?.action?.value ||
+    data?.action?.option?.value ||
+    data?.action?.option ||
+    {};
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      value = {};
+    }
+  }
+  const chatId =
+    data?.context?.open_chat_id ||
+    data?.open_chat_id ||
+    data?.chat_id ||
+    data?.context?.chat_id;
+  const userId =
+    data?.operator?.open_id ||
+    data?.operator?.user_id ||
+    data?.user_id ||
+    data?.operator?.union_id;
+  if (!chatId || !value?.id) {
+    console.error(`[connector:${account.id}] card action missing chat/value`, data);
+    return { toast: { type: 'error', content: '无法识别操作' } };
+  }
+  try {
+    const result = broker.handleCardAction({ chatId, userId, value });
+    return { toast: { type: result.ok ? 'success' : 'error', content: result.toast || '已处理' } };
+  } catch (error) {
+    console.error(`[connector:${account.id}] card action failed`, error?.message || error);
+    return { toast: { type: 'error', content: '处理失败' } };
+  }
+}
+
 function memoryTextFor(account, chatId) {
   const state = readJson(bindingsFile, {});
   const binding = state.bindings?.[`${account.appId}:${chatId}`];
@@ -138,9 +195,15 @@ export async function startConnector(overrides = {}) {
     throw new Error('没有可用的飞书账号。请先运行 im-agent-team-onboard 创建机器人，或在 config.json 设置 qoderConnector.accountIds。');
   }
 
+  runtime.runtimeInfo = describeQoderRuntime();
+  if (!runtime.runtimeInfo.available) {
+    throw new Error(runtime.runtimeInfo.error || 'Qoder worker runtime 不可用。');
+  }
+
   runtime.sessions = readJson(sessionsFile, { version: 1, byAccount: {} });
   runtime.clients = [];
   runtime.accounts = [];
+  runtime.brokers = [];
   runtime.lastError = undefined;
   runtime.running = true;
   runtime.startedAt = Date.now();
@@ -153,15 +216,25 @@ export async function startConnector(overrides = {}) {
     const info = await botInfo(account);
     const selfOpenId = info.open_id;
     const sessions = accountSessions(account);
+    const broker = createInteractionBroker({
+      accountId: account.id,
+      stateDir,
+      sendText: (chatId, text) => sendText(account, chatId, text),
+      sendCard: (chatId, card) => sendCard(account, chatId, card),
+      logger: console,
+      timeoutMs: Number(settings.timeoutMs || 180_000),
+    });
+    runtime.brokers.push(broker);
     const worker = createWorker({
       account: { ...account, selfOpenId },
       settings,
       sessions,
       saveSessions,
       memoryText: (chatId) => memoryTextFor(account, chatId),
-      runQoder: runQoderCli,
+      runQoder: runQoderSdk,
       send: ({ chatId, text }) => sendText(account, chatId, text),
       logger: console,
+      broker,
     });
 
     const client = new Lark.WSClient({
@@ -184,6 +257,8 @@ export async function startConnector(overrides = {}) {
         });
         return undefined;
       },
+      'card.action.trigger': (data) => handleCardAction(account, broker, data),
+      'card.action.trigger_v1': (data) => handleCardAction(account, broker, data),
     });
     await client.start({ eventDispatcher: dispatcher });
     runtime.clients.push({ id: account.id, client });
@@ -205,6 +280,19 @@ export async function stopConnector() {
   runtime.clients = [];
   runtime.accounts = [];
   runtime.running = false;
+  for (const broker of runtime.brokers) {
+    try {
+      broker.cancelAll();
+    } catch {
+      // ignore
+    }
+  }
+  runtime.brokers = [];
+  try {
+    await shutdownQoderSdk();
+  } catch {
+    // daemon may already be stopped
+  }
   return getStatus();
 }
 
@@ -215,6 +303,11 @@ export function getStatus() {
     accounts: runtime.accounts,
     lastError: runtime.lastError,
     lastMessageAt: runtime.lastMessageAt,
+    runtime: runtime.runtimeInfo || describeQoderRuntime(),
+    pendingInteractions: runtime.brokers.reduce(
+      (total, broker) => total + (broker.pendingCount?.() || 0),
+      0,
+    ),
     configured: feishuAccounts(accountSettings()).map((account) => ({
       id: account.id,
       name: account.role?.name || account.id,

@@ -23,6 +23,19 @@
 }
 ```
 
+## Agent 自助接入（feishu_team_onboard）
+
+DSH Agent 可以直接调用 `feishu_team_onboard`，不需要终端：
+
+| action | 作用 |
+|---|---|
+| `start` | 启动飞书官方扫码，返回授权链接 |
+| `status` | 查询进度；扫码完成后自动启动新账号的 channel/controller |
+| `reload` | 重新读取 `config.json`，启动尚未启动的账号 |
+| `list` | 查看已启动账号 |
+
+一次扫码完成后，新 bot 会立即出现在 `controllers` 中，可以直接在飞书群里 @ 它。Qoder 侧对应的是 `feishu_onboard` / `feishu_connect`，行为一致。
+
 ## 完全权限（fullAccess）
 
 `fullAccess: true`（默认）时，`DshRuntime` 会：
@@ -83,5 +96,5 @@
 ## 测试
 
 ```bash
-node --test test/unit.test.js test/controller.test.js test/memory.test.js test/native-interactions.test.js
+node --test test/unit.test.js test/controller.test.js test/memory.test.js test/native-interactions.test.js test/onboard.test.js test/dsh-plugin.test.js
 ```

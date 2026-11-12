@@ -1,6 +1,6 @@
 {
   "name": "im-agent-team",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "IM-based multi-agent team bridge for DeepSeek Harness: turn members of a Feishu group into collaborating agents.",
   "license": "MIT",
   "author": "minjorx",
@@ -58,8 +58,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/unit.test.js test/controller.test.js test/memory.test.js",
-    "pack": "pnpm pack",
+    "test": "node --test test/unit.test.js test/controller.test.js test/memory.test.js test/native-interactions.test.js test/onboard.test.js test/dsh-plugin.test.js",
+    "pack": "node scripts/build-dsh-package.mjs",
+    "pack:dsh": "node scripts/build-dsh-package.mjs",
+    "pack:qoder": "node runtimes/qoder/build.mjs",
+    "pack:all": "node scripts/build-packages.mjs",
     "onboard": "node bin/onboard.mjs"
   }
 }

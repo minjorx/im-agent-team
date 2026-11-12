@@ -6,12 +6,12 @@
 |---|---|---|
 | DSH 原生 Agent | ✅ `runtimes/dsh/native.js` | 复用 bridge-core，新增 channel |
 | DSH 子 Agent | ✅ `runtimes/dsh/subagent.js` | 复用 bridge-core，新增 channel |
-| Qoder | 🟡 Qoder 插件控制面已建（`runtimes/qoder/`）；纯插件 connector 待 Plugin SDK | 后续 |
+| Qoder | ✅ 插件内 Agent SDK + Qoder 自带 worker runtime（无需 CLI） | 后续 |
 | Claude Code / Codex 等 | 复用 bridge-core，新增 runtime | 两者分别扩展 |
 
 核心原则：**bridge-core 不认识飞书，也不认识 DSH**；渠道适配层只负责“平台消息 ↔ 统一消息”，运行时适配层只负责“统一消息 ↔ Agent”。团队协议、名册、角色、记忆、防环全部在 bridge-core。
 
-Qoder 的可行性已单独调研：[docs/qoder-integration.md](qoder-integration.md)。结论是 Agent SDK 最合适，ACP 备选，CLI headless 用于 POC。
+Qoder 的可行性已单独调研：[docs/qoder-integration.md](qoder-integration.md)。已按 Agent SDK + Qoder 自带 worker runtime 落地；ACP 仍可作为备选，CLI headless 仅用于开发验证。
 
 ## 目录
 
@@ -47,7 +47,7 @@ runtimes/                     # 具体 AI 工具实现，可分别打包
     ├── skills/
     ├── bin/                  # MCP server
     ├── connector/            # 飞书 WS + 插件宿主
-    ├── runtime/              # Qoder CLI 运行时（实验）
+    ├── runtime/              # Qoder Agent SDK 运行时（worker）
     └── build.mjs             # 生成 Qoder 插件 ZIP
 
 index.js                      # DSH 插件入口（组合 lib + runtimes/dsh）
