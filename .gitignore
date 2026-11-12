@@ -1,5 +1,7 @@
 node_modules/
 *.tgz
+*.tgz.sha256
+*.sha256
 *.log
 .DS_Store
 .env
